@@ -3,8 +3,8 @@ package http3
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
+	"github.com/Noooste/utls"
 	"io"
 	"log/slog"
 	"net"
@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Noooste/quic-go"
+	mockquic "github.com/Noooste/quic-go/internal/mocks/quic"
+	"github.com/Noooste/quic-go/internal/protocol"
+	"github.com/Noooste/quic-go/internal/testdata"
+	"github.com/Noooste/quic-go/quicvarint"
 	"github.com/quic-go/qpack"
-	"github.com/quic-go/quic-go"
-	mockquic "github.com/quic-go/quic-go/internal/mocks/quic"
-	"github.com/quic-go/quic-go/internal/protocol"
-	"github.com/quic-go/quic-go/internal/testdata"
-	"github.com/quic-go/quic-go/quicvarint"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

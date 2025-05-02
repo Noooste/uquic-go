@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls"
 	"io"
 	mrand "math/rand/v2"
 	"net"
@@ -22,9 +22,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3"
-	quicproxy "github.com/quic-go/quic-go/integrationtests/tools/proxy"
+	"github.com/Noooste/quic-go"
+	"github.com/Noooste/quic-go/http3"
+	quicproxy "github.com/Noooste/quic-go/integrationtests/tools/proxy"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
