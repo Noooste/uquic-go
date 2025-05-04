@@ -7,15 +7,15 @@ import (
 	"github.com/Noooste/fhttp"
 	"io"
 	"log/slog"
-"github.com/Noooste/fhttp/httptrace"
-"net/textproto"
-"time"
+	"github.com/Noooste/fhttp/httptrace"
+	"net/textproto"
+	"time"
+	
+	"github.com/Noooste/quic-go"
+	"github.com/Noooste/quic-go/internal/protocol"
+	"github.com/Noooste/quic-go/quicvarint"
 
-"github.com/Noooste/quic-go"
-"github.com/Noooste/quic-go/internal/protocol"
-"github.com/Noooste/quic-go/quicvarint"
-
-"github.com/quic-go/qpack"
+	"github.com/quic-go/qpack"
 )
 
 const (

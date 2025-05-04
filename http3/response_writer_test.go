@@ -2,8 +2,8 @@ package http3
 
 import (
 	"bytes"
+	"github.com/Noooste/fhttp"
 	"io"
-	"net/http"
 	"testing"
 
 	mockquic "github.com/Noooste/quic-go/internal/mocks/quic"

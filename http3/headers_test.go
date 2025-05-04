@@ -2,7 +2,7 @@ package http3
 
 import (
 	"fmt"
-	"net/http"
+	"github.com/Noooste/fhttp"
 	"testing"
 
 	"github.com/quic-go/qpack"

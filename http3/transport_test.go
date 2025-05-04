@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptest"
 	"github.com/Noooste/utls"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
