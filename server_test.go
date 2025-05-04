@@ -38,11 +38,11 @@ type serverOpts struct {
 		context.CancelCauseFunc,
 		sendConn,
 		*Transport,
-		protocol.ConnectionID,  // original dest connection ID
+		protocol.ConnectionID, // original dest connection ID
 		*protocol.ConnectionID, // retry src connection ID
-		protocol.ConnectionID,  // client dest connection ID
-		protocol.ConnectionID,  // destination connection ID
-		protocol.ConnectionID,  // source connection ID
+		protocol.ConnectionID, // client dest connection ID
+		protocol.ConnectionID, // destination connection ID
+		protocol.ConnectionID, // source connection ID
 		ConnectionIDGenerator,
 		*statelessResetter,
 		*Config,
