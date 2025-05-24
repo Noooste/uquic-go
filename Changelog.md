@@ -9,7 +9,7 @@
 
 ## v0.21.2 (2021-07-15)
 
-- Update qtls (for Go 1.15, 1.16 and 1.17rc1) to include the fix for the crypto/tls panic (see https://groups.google.com/g/golang-dev/c/5LJ2V7rd-Ag/m/YGLHVBZ6AAAJ for details)
+- Update qtls (for Go 1.15, 1.16 and 1.17rc1) to include the fix for the github.com/Noooste/utls panic (see https://groups.google.com/g/golang-dev/c/5LJ2V7rd-Ag/m/YGLHVBZ6AAAJ for details)
 
 ## v0.21.0 (2021-06-01)
 
@@ -101,8 +101,8 @@
 - Add a `quic.Config` option to configure keep-alive
 - Rename the STK to Cookie
 - Implement `net.Conn`-style deadlines for streams
-- Remove the `tls.Config` from the `quic.Config`. The `tls.Config` must now be passed to the `Dial` and `Listen` functions as a separate parameter. See the [Godoc](https://godoc.org/github.com/quic-go/quic-go) for details.
-- Changed the log level environment variable to only accept strings ("DEBUG", "INFO", "ERROR"), see [the wiki](https://github.com/quic-go/quic-go/wiki/Logging) for more details.
+- Remove the `tls.Config` from the `quic.Config`. The `tls.Config` must now be passed to the `Dial` and `Listen` functions as a separate parameter. See the [Godoc](https://godoc.org/github.com/Noooste/quic-go) for details.
+- Changed the log level environment variable to only accept strings ("DEBUG", "INFO", "ERROR"), see [the wiki](https://github.com/Noooste/quic-go/wiki/Logging) for more details.
 - Rename the `h2quic.QuicRoundTripper` to `h2quic.RoundTripper`
 - Changed `h2quic.Server.Serve()` to accept a `net.PacketConn`
 - Drop support for Go 1.7 and 1.8.

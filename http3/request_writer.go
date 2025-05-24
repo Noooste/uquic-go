@@ -5,19 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"io"
 	"net"
-"github.com/Noooste/fhttp/httptrace"
-"strconv"
-"strings"
-"sync"
+	"strconv"
+	"strings"
+	"sync"
 
-"golang.org/x/net/http/httpguts"
-"golang.org/x/net/http2/hpack"
-"golang.org/x/net/idna"
+	"golang.org/x/net/http/httpguts"
+	"golang.org/x/net/http2/hpack"
+	"golang.org/x/net/idna"
 
-"github.com/Noooste/quic-go"
-"github.com/quic-go/qpack"
+	"github.com/quic-go/qpack"
 )
 
 const bodyCopyBufferSize = 8 * 1024
@@ -37,13 +36,13 @@ func newRequestWriter() *requestWriter {
 	}
 }
 
-func (w *requestWriter) WriteRequestHeader(str quic.Stream, req *http.Request, gzip bool) error {
+func (w *requestWriter) WriteRequestHeader(wr io.Writer, req *http.Request, gzip bool) error {
 	// TODO: figure out how to add support for trailers
 	buf := &bytes.Buffer{}
 	if err := w.writeHeaders(buf, req, gzip); err != nil {
 		return err
 	}
-	if _, err := str.Write(buf.Bytes()); err != nil {
+	if _, err := wr.Write(buf.Bytes()); err != nil {
 		return err
 	}
 	trace := httptrace.ContextClientTrace(req.Context())

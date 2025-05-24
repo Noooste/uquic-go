@@ -5,19 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"github.com/Noooste/utls"
 	"io"
 	"log/slog"
 	"net"
-"github.com/Noooste/fhttp/httptrace"
-"strings"
-"sync"
-"sync/atomic"
+	"net/url"
+	"strings"
+	"sync"
+	"sync/atomic"
 
-"golang.org/x/net/http/httpguts"
+	"golang.org/x/net/http/httpguts"
 
-"github.com/Noooste/quic-go"
-"github.com/Noooste/quic-go/internal/protocol"
+	"github.com/Noooste/quic-go"
+	"github.com/Noooste/quic-go/internal/protocol"
 )
 
 // Settings are HTTP/3 settings that apply to the underlying connection.
@@ -322,7 +323,7 @@ func (t *Transport) dial(ctx context.Context, hostname string) (quic.EarlyConnec
 		tlsConf.ServerName = sni
 	}
 	// Replace existing ALPNs by H3
-	tlsConf.NextProtos = []string{versionToALPN(t.QUICConfig.Versions[0])}
+	tlsConf.NextProtos = []string{NextProtoH3}
 
 	dial := t.Dial
 	if dial == nil {
@@ -426,6 +427,13 @@ func (t *Transport) Close() error {
 		t.transport = nil
 	}
 	return nil
+}
+
+func hostnameFromURL(url *url.URL) string {
+	if url != nil {
+		return url.Host
+	}
+	return ""
 }
 
 func validMethod(method string) bool {
