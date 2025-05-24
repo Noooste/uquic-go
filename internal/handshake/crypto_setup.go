@@ -95,7 +95,9 @@ func NewCryptoSetupClient(
 	cs.allow0RTT = enable0RTT
 
 	cs.conn = tls.UQUICClient(quicConf, tls.HelloCustom)
-	_ = cs.conn.ApplyPreset(tlsConf.ClientHelloSpec)
+	if tlsConf.ClientHelloSpec != nil {
+		cs.conn.ApplyPreset(tlsConf.ClientHelloSpec)
+	}
 
 	cs.conn.SetTransportParameters(cs.ourParams.Marshal(protocol.PerspectiveClient))
 
