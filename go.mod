@@ -5,8 +5,8 @@ go 1.24
 toolchain go1.24.1
 
 require (
-	github.com/Noooste/fhttp v1.0.13
-	github.com/Noooste/utls v1.3.7
+	github.com/Noooste/fhttp v0.0.0-20250524111625-1c2c991a8370
+	github.com/Noooste/utls v0.0.0-20250506103339-94e35d01df73
 	github.com/francoispqt/gojay v1.2.13
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.6
