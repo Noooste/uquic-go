@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quic-go/quic-go/internal/protocol"
-	"github.com/stretchr/testify/require"
+	"github.com/Noooste/quic-go/internal/protocol"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 const (
