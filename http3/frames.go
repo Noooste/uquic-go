@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 
 	"github.com/Noooste/quic-go"
 	"github.com/Noooste/quic-go/quicvarint"
@@ -99,10 +100,15 @@ func (f *headersFrame) Append(b []byte) []byte {
 }
 
 const (
+	SettingsQpackMaxTableCapacity uint64 = 0x1
+	SettingsMaxFieldSectionSize   uint64 = 0x6
+	SettingsQpackBlockedStreams   uint64 = 0x7
 	// Extended CONNECT, RFC 9220
-	settingExtendedConnect = 0x8
-	// HTTP Datagrams, RFC 9297
-	settingDatagram = 0x33
+	settingExtendedConnect uint64 = 0x8
+	// SettingsH3Datagram is used to enable HTTP datagrams, RFC 9297
+	SettingsH3Datagram         uint64 = 0x33
+	SettingsEnableWebTransport uint64 = 727725890     // Enable WebTransport, RFC 9298
+	SettingsGREASE             uint64 = 0x1f*1 + 0x21 // GREASE value, RFC 9114
 )
 
 type settingsFrame struct {
@@ -110,6 +116,7 @@ type settingsFrame struct {
 	ExtendedConnect bool // Extended CONNECT, RFC 9220
 
 	Other map[uint64]uint64 // all settings that we don't explicitly recognize
+	Order []uint64          // the order in which the settings were received, for serialization purposes
 }
 
 func parseSettingsFrame(r io.Reader, l uint64) (*settingsFrame, error) {
@@ -146,7 +153,7 @@ func parseSettingsFrame(r io.Reader, l uint64) (*settingsFrame, error) {
 				return nil, fmt.Errorf("invalid value for SETTINGS_ENABLE_CONNECT_PROTOCOL: %d", val)
 			}
 			frame.ExtendedConnect = val == 1
-		case settingDatagram:
+		case SettingsH3Datagram:
 			if readDatagram {
 				return nil, fmt.Errorf("duplicate setting: %d", id)
 			}
@@ -172,17 +179,26 @@ func (f *settingsFrame) Append(b []byte) []byte {
 	b = quicvarint.Append(b, 0x4)
 	var l int
 	for id, val := range f.Other {
-		l += quicvarint.Len(id) + quicvarint.Len(val)
+		if id == SettingsGREASE {
+			l += quicvarint.Len(quicvarint.Max)
+			if val != 0 {
+				l += quicvarint.Len(val)
+			} else {
+				l += quicvarint.Len(quicvarint.Max)
+			}
+		} else {
+			l += quicvarint.Len(id) + quicvarint.Len(val)
+		}
 	}
 	if f.Datagram {
-		l += quicvarint.Len(settingDatagram) + quicvarint.Len(1)
+		l += quicvarint.Len(SettingsH3Datagram) + quicvarint.Len(1)
 	}
 	if f.ExtendedConnect {
 		l += quicvarint.Len(settingExtendedConnect) + quicvarint.Len(1)
 	}
 	b = quicvarint.Append(b, uint64(l))
 	if f.Datagram {
-		b = quicvarint.Append(b, settingDatagram)
+		b = quicvarint.Append(b, SettingsH3Datagram)
 		b = quicvarint.Append(b, 1)
 	}
 	if f.ExtendedConnect {
@@ -190,9 +206,90 @@ func (f *settingsFrame) Append(b []byte) []byte {
 		b = quicvarint.Append(b, 1)
 	}
 	for id, val := range f.Other {
+		if id == SettingsH3Datagram && f.Datagram {
+			// We already added this setting.
+			continue
+		}
+
+		if id == SettingsGREASE && val == 0 {
+			// generate a GREASE value
+			key := 0x1f*uint64(rand.Int32()) + 0x21
+			val = rand.Uint64() % (1 << 32)
+			b = quicvarint.Append(b, key) // GREASE value, RFC 9114
+			b = quicvarint.Append(b, val)
+			continue // GREASE values are not added to the Other map
+		}
+
 		b = quicvarint.Append(b, id)
 		b = quicvarint.Append(b, val)
 	}
+	return b
+}
+
+func (f *settingsFrame) AppendWithOrder(b []byte) []byte {
+	if f.Order == nil {
+		return f.Append(b)
+	}
+
+	b = quicvarint.Append(b, 0x4)
+	var l int
+	for _, id := range f.Order {
+		val, ok := f.Other[id]
+		if !ok {
+			continue // skip unknown settings
+		}
+		if id == SettingsGREASE {
+			l += quicvarint.Len(quicvarint.Max)
+			if val != 0 {
+				l += quicvarint.Len(val)
+			} else {
+				l += quicvarint.Len(quicvarint.Max)
+			}
+		} else {
+			l += quicvarint.Len(id) + quicvarint.Len(val)
+		}
+	}
+	if f.Datagram {
+		l += quicvarint.Len(SettingsH3Datagram) + quicvarint.Len(1)
+	}
+	if f.ExtendedConnect {
+		l += quicvarint.Len(settingExtendedConnect) + quicvarint.Len(1)
+	}
+	b = quicvarint.Append(b, uint64(l))
+	var datagramAdded, extendedConnectAdded bool
+	for _, id := range f.Order {
+		val, ok := f.Other[id]
+		if !ok {
+			continue // skip unknown settings
+		}
+		if id == SettingsH3Datagram {
+			datagramAdded = true
+		}
+		if id == settingExtendedConnect {
+			extendedConnectAdded = true
+		}
+		if id == SettingsGREASE && val == 0 {
+			// generate a GREASE value
+			key := 0x1f*uint64(rand.Int32()) + 0x21
+			val = rand.Uint64() % (1 << 32)
+			b = quicvarint.Append(b, key) // GREASE value, RFC 9114
+			b = quicvarint.Append(b, val)
+			continue // GREASE values are not added to the Other map
+		}
+
+		b = quicvarint.Append(b, id)
+		b = quicvarint.Append(b, val)
+	}
+
+	if f.Datagram && !datagramAdded {
+		b = quicvarint.Append(b, SettingsH3Datagram)
+		b = quicvarint.Append(b, 1)
+	}
+	if f.ExtendedConnect && !extendedConnectAdded {
+		b = quicvarint.Append(b, settingExtendedConnect)
+		b = quicvarint.Append(b, 1)
+	}
+
 	return b
 }
 

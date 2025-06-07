@@ -86,6 +86,9 @@ type Transport struct {
 	// It is invalid to specify any settings defined by RFC 9114 (HTTP/3) and RFC 9297 (HTTP Datagrams).
 	AdditionalSettings map[uint64]uint64
 
+	// uQuic being
+	AdditionalSettingsOrder []uint64
+
 	// MaxResponseHeaderBytes specifies a limit on how many response bytes are
 	// allowed in the server's response header.
 	// Zero means to use a default limit.
@@ -129,6 +132,7 @@ func (t *Transport) init() error {
 				conn,
 				t.EnableDatagrams,
 				t.AdditionalSettings,
+				t.AdditionalSettingsOrder,
 				t.StreamHijacker,
 				t.UniStreamHijacker,
 				t.MaxResponseHeaderBytes,
@@ -191,6 +195,11 @@ func (t *Transport) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		return nil, fmt.Errorf("http3: invalid method %q", req.Method)
 	}
 	for k, vv := range req.Header {
+		if k == http.PHeaderOrderKey || k == http.HeaderOrderKey {
+			// This is a special header used by the Transport to control the order of headers.
+			// It is not a valid HTTP header field name, so we skip it here.
+			continue
+		}
 		if !httpguts.ValidHeaderFieldName(k) {
 			return nil, fmt.Errorf("http3: invalid http header field name %q", k)
 		}
@@ -423,6 +432,7 @@ func (t *Transport) NewClientConn(conn *quic.Conn) *ClientConn {
 		conn,
 		t.EnableDatagrams,
 		t.AdditionalSettings,
+		t.AdditionalSettingsOrder,
 		t.StreamHijacker,
 		t.UniStreamHijacker,
 		t.MaxResponseHeaderBytes,
