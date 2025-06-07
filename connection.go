@@ -442,6 +442,7 @@ var newClientConnection = func(
 		tracer,
 		logger,
 		s.version,
+		conf.TLSGetClientHelloSpec, // uQuic-go
 	)
 	s.cryptoStreamHandler = cs
 	s.cryptoStreamManager = newCryptoStreamManager(s.initialStream, s.handshakeStream, oneRTTStream)

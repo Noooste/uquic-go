@@ -75,6 +75,7 @@ func NewCryptoSetupClient(
 	tracer *logging.ConnectionTracer,
 	logger utils.Logger,
 	version protocol.Version,
+	clientHelloFn func() *tls.ClientHelloSpec,
 ) CryptoSetup {
 	cs := newCryptoSetup(
 		connID,
@@ -91,10 +92,17 @@ func NewCryptoSetupClient(
 	cs.tlsConf = tlsConf
 	cs.allow0RTT = enable0RTT
 
-	cs.conn = tls.QUICClient(&tls.QUICConfig{
+	cs.conn = tls.QUICClient(&tls.QUICConfig{ // uQuic-go
 		TLSConfig:           tlsConf,
 		EnableSessionEvents: true,
 	})
+
+	//if clientHelloFn != nil {
+	//	if err := cs.conn.ApplyPreset(clientHelloFn()); err != nil {
+	//		panic(fmt.Sprintf("failed to apply client hello preset: %s", err))
+	//	}
+	//}
+
 	cs.conn.SetTransportParameters(cs.ourParams.Marshal(protocol.PerspectiveClient))
 
 	return cs
@@ -112,25 +120,27 @@ func NewCryptoSetupServer(
 	logger utils.Logger,
 	version protocol.Version,
 ) CryptoSetup {
-	cs := newCryptoSetup(
-		connID,
-		tp,
-		rttStats,
-		tracer,
-		logger,
-		protocol.PerspectiveServer,
-		version,
-	)
-	cs.allow0RTT = allow0RTT
+	panic("NewCryptoSetupServer is not yet implemented for github.com/Noooste/uquic-go")
 
-	tlsConf = setupConfigForServer(tlsConf, localAddr, remoteAddr)
-
-	cs.tlsConf = tlsConf
-	cs.conn = tls.QUICServer(&tls.QUICConfig{
-		TLSConfig:           tlsConf,
-		EnableSessionEvents: true,
-	})
-	return cs
+	//cs := newCryptoSetup(
+	//	connID,
+	//	tp,
+	//	rttStats,
+	//	tracer,
+	//	logger,
+	//	protocol.PerspectiveServer,
+	//	version,
+	//)
+	//cs.allow0RTT = allow0RTT
+	//
+	//tlsConf = setupConfigForServer(tlsConf, localAddr, remoteAddr)
+	//
+	//cs.tlsConf = tlsConf
+	//cs.conn = tls.QUICServer(&tls.QUICConfig{
+	//	TLSConfig:           tlsConf,
+	//	EnableSessionEvents: true,
+	//})
+	//return cs
 }
 
 func newCryptoSetup(
