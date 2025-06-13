@@ -1,11 +1,10 @@
 package ackhandler
 
 import (
-	mocklogging "github.com/Noooste/quic-go/internal/mocks/logging"
-	"github.com/Noooste/quic-go/internal/protocol"
-	"github.com/Noooste/quic-go/internal/utils"
-	"github.com/Noooste/quic-go/logging"
-	"testing"
+	mocklogging "github.com/Noooste/uquic-go/internal/mocks/logging"
+	"github.com/Noooste/uquic-go/internal/protocol"
+	"github.com/Noooste/uquic-go/internal/utils"
+	"github.com/Noooste/uquic-go/logging"
 
 
 	"github.com/stretchr/testify/require"

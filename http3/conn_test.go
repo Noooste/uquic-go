@@ -7,8 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Noooste/quic-go"
-	"github.com/Noooste/quic-go/quicvarint"
+	"github.com/Noooste/uquic-go"
+	mockquic "github.com/Noooste/uquic-go/internal/mocks/quic"
+	"github.com/Noooste/uquic-go/internal/protocol"
+	"github.com/Noooste/uquic-go/internal/qerr"
+	"github.com/Noooste/uquic-go/quicvarint"
 
 	"github.com/stretchr/testify/require"
 )
