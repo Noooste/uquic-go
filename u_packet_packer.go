@@ -240,42 +240,75 @@ func (p *uPacketPacker) appendInitialPacket(buffer *packetBuffer, header *wire.E
 func (p *uPacketPacker) MarshalInitialPacketPayload(pl payload, v protocol.Version) ([]byte, error) {
 	var originalFrameBytes []byte
 
+	// Collect ALL frame types, not just crypto frames
 	for _, f := range pl.frames {
 		var err error
-		// only append crypto frames
-		if _, ok := f.Frame.(*wire.CryptoFrame); !ok {
-			continue
-		}
-
 		originalFrameBytes, err = f.Frame.Append(originalFrameBytes, v)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// extract CryptoData from originalFrameBytes
-	// parse frames
+	// Check if we need to do custom frame building
+	// Only do custom frame building for the FIRST packet (when we have the complete ClientHello)
+
+	// Parse frames to check if this looks like a first packet or continuation
 	r := bytes.NewReader(originalFrameBytes)
 	qchframes, err := clienthellod.ReadAllFrames(r)
 	if err != nil {
 		return nil, err
 	}
 
-	// parse crypto data
-	cryptoData, err := clienthellod.ReassembleCRYPTOFrames(qchframes)
-	if err != nil {
-		return nil, err
-	}
-
-	if qf, ok := p.uSpec.InitialPacketSpec.FrameBuilder.(QUICFrames); p.uSpec.InitialPacketSpec.FrameBuilder == nil || ok && len(qf) == 0 {
-		qfs := QUICFrames{}
-		for _, frame := range qchframes {
-			if cryptoFrame, ok := frame.(*clienthellod.CRYPTO); ok {
-				qfs = append(qfs, QUICFrameCrypto{int(cryptoFrame.Offset), int(cryptoFrame.Length)})
+	// Check if this is the first crypto packet (starts at offset 0)
+	isFirstPacket := false
+	for _, frame := range qchframes {
+		if cryptoFrame, ok := frame.(*clienthellod.CRYPTO); ok {
+			if cryptoFrame.Offset == 0 {
+				isFirstPacket = true
+				break
 			}
 		}
-		return qfs.Build(cryptoData)
 	}
+
+	// If this is not the first packet, just return the original frames
+	// This preserves PADDING/PING frames in continuation packets
+	if !isFirstPacket {
+		return originalFrameBytes, nil
+	}
+
+	// Only for the first packet, check if we need custom frame building
+	if p.uSpec.InitialPacketSpec.FrameBuilder == nil {
+		// No custom frame builder, return original frames
+		return originalFrameBytes, nil
+	}
+
+	// Check if it's empty QUICFrames (default behavior)
+	if qf, ok := p.uSpec.InitialPacketSpec.FrameBuilder.(QUICFrames); ok && len(qf) == 0 {
+		// Empty QUICFrames means default behavior - return original frames
+		return originalFrameBytes, nil
+	}
+
+	// For custom frame builders (QUICRandomFrames or specific QUICFrames),
+	// extract only crypto data and rebuild frames according to spec
+
+	// Filter out only CRYPTO frames for reassembly
+	var cryptoFrames []clienthellod.Frame
+	for _, frame := range qchframes {
+		if frame.FrameType() == clienthellod.QUICFrame_CRYPTO {
+			cryptoFrames = append(cryptoFrames, frame)
+		}
+	}
+
+	// Extract crypto data
+	cryptoData, err := clienthellod.ReassembleCRYPTOFrames(qchframes)
+	if err != nil {
+		// If we can't reassemble (due to fragmentation), just return original
+		// This preserves the existing frame structure including PADDING/PING
+		return originalFrameBytes, nil
+	}
+
+	// Use custom frame builder to create new frame structure
+	// This will include CRYPTO, PING, and PADDING frames as specified
 	return p.uSpec.InitialPacketSpec.FrameBuilder.Build(cryptoData)
 }
 
