@@ -9,7 +9,7 @@ import (
 	mrand "math/rand"
 
 	"github.com/Noooste/uquic-go/quicvarint"
-	"github.com/gaukas/clienthellod"
+	"github.com/refraction-networking/clienthellod"
 )
 
 type QUICFrameBuilder interface {
