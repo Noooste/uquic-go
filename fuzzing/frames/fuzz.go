@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/Noooste/quic-go/internal/ackhandler"
-	"github.com/Noooste/quic-go/internal/protocol"
-	"github.com/Noooste/quic-go/internal/wire"
+	"github.com/Noooste/uquic-go/internal/ackhandler"
+	"github.com/Noooste/uquic-go/internal/protocol"
+	"github.com/Noooste/uquic-go/internal/wire"
 )
 
 const version = protocol.Version1

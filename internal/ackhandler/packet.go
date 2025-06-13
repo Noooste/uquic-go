@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Noooste/quic-go/internal/protocol"
+	"github.com/Noooste/uquic-go/internal/protocol"
 )
 
 type packetWithPacketNumber struct {
