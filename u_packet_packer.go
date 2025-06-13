@@ -8,7 +8,7 @@ import (
 	"github.com/Noooste/uquic-go/internal/handshake"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/wire"
-	"github.com/refraction-networking/clienthellod"
+	"github.com/gaukas/clienthellod"
 )
 
 // uPacketPacker is an extended packetPacker which is used
