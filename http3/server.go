@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Noooste/uquic-go"
-	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/quicvarint"
 
 	"github.com/quic-go/qpack"

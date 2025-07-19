@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"io"
 	"log/slog"
-	"net/http/httptrace"
 	"net/textproto"
 	"time"
 
 	"github.com/Noooste/uquic-go"
-	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/quicvarint"
 
 	"github.com/quic-go/qpack"
@@ -82,6 +81,7 @@ func newClientConn(
 	conn *quic.Conn,
 	enableDatagrams bool,
 	additionalSettings map[uint64]uint64,
+	additionalSettingsOrder []uint64,
 	streamHijacker func(FrameType, quic.ConnectionTracingID, *quic.Stream, error) (hijacked bool, err error),
 	uniStreamHijacker func(StreamType, quic.ConnectionTracingID, *quic.ReceiveStream, error) (hijacked bool),
 	maxResponseHeaderBytes int64,

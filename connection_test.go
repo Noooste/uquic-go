@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"github.com/Noooste/uquic-go/internal/flowcontrol"
 	"github.com/Noooste/utls"
 	"net"
 	"net/netip"

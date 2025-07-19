@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/Noooste/utls"
-	"io"
+
 	"net"
 	"slices"
 	"time"

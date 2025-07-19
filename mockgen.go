@@ -11,22 +11,22 @@ type RawConn = rawConn
 //go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/quic-go -destination mock_sender_test.go github.com/Noooste/quic-go Sender"
 type Sender = sender
 
-//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_stream_sender_test.go github.com/quic-go/quic-go StreamSender"
+//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/uquic-go -destination mock_stream_sender_test.go github.com/Noooste/uquic-go StreamSender"
 type StreamSender = streamSender
 
 //go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/quic-go -destination mock_stream_control_frame_getter_test.go github.com/Noooste/quic-go StreamControlFrameGetter"
 type StreamControlFrameGetter = streamControlFrameGetter
 
-//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_stream_frame_getter_test.go github.com/quic-go/quic-go StreamFrameGetter"
+//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/uquic-go -destination mock_stream_frame_getter_test.go github.com/Noooste/uquic-go StreamFrameGetter"
 type StreamFrameGetter = streamFrameGetter
 
-//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_frame_source_test.go github.com/quic-go/quic-go FrameSource"
+//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/uquic-go -destination mock_frame_source_test.go github.com/Noooste/uquic-go FrameSource"
 type FrameSource = frameSource
 
 //go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/quic-go -destination mock_ack_frame_source_test.go github.com/Noooste/quic-go AckFrameSource"
 type AckFrameSource = ackFrameSource
 
-//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_sealing_manager_test.go github.com/quic-go/quic-go SealingManager"
+//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/uquic-go -destination mock_sealing_manager_test.go github.com/Noooste/uquic-go SealingManager"
 type SealingManager = sealingManager
 
 //go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/quic-go -destination mock_unpacker_test.go github.com/Noooste/quic-go Unpacker"
@@ -41,7 +41,7 @@ type MTUDiscoverer = mtuDiscoverer
 //go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/quic-go -destination mock_conn_runner_test.go github.com/Noooste/quic-go ConnRunner"
 type ConnRunner = connRunner
 
-//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_packet_handler_test.go github.com/quic-go/quic-go PacketHandler"
+//go:generate sh -c "go run go.uber.org/mock/mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/Noooste/uquic-go -destination mock_packet_handler_test.go github.com/Noooste/uquic-go PacketHandler"
 type PacketHandler = packetHandler
 
 //go:generate sh -c "go run go.uber.org/mock/mockgen -typed -package quic -self_package github.com/Noooste/quic-go -self_package github.com/Noooste/quic-go -destination mock_packetconn_test.go net PacketConn"

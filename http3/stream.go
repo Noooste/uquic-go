@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"io"
-	"net/http"
-	"net/http/httptrace"
 	"time"
 
-	"github.com/quic-go/quic-go"
+	"github.com/Noooste/uquic-go"
 
 	"github.com/quic-go/qpack"
 )

@@ -30,20 +30,23 @@ var newUClientConnection = func(
 	logger utils.Logger,
 	v protocol.Version,
 	uSpec *QUICSpec, // [UQUIC]
-) quicConn {
-	s := &connection{
-		conn:                conn,
-		config:              conf,
-		origDestConnID:      destConnID,
-		handshakeDestConnID: destConnID,
-		srcConnIDLen:        srcConnID.Len(),
-		perspective:         protocol.PerspectiveClient,
-		logID:               destConnID.String(),
-		logger:              logger,
-		tracer:              tracer,
-		versionNegotiated:   hasNegotiatedVersion,
-		version:             v,
+) *wrappedConn {
+	s := &wrappedConn{
+		Conn: &Conn{
+			conn:                conn,
+			config:              conf,
+			origDestConnID:      destConnID,
+			handshakeDestConnID: destConnID,
+			srcConnIDLen:        srcConnID.Len(),
+			perspective:         protocol.PerspectiveClient,
+			logID:               destConnID.String(),
+			logger:              logger,
+			tracer:              tracer,
+			versionNegotiated:   hasNegotiatedVersion,
+			version:             v,
+		},
 	}
+
 	s.connIDManager = newConnIDManager(
 		destConnID,
 		func(token protocol.StatelessResetToken) { runner.AddResetToken(token, s) },

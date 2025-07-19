@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
+	tls "github.com/Noooste/utls"
 	"sync/atomic"
 	"time"
 
