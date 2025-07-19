@@ -1,9 +1,9 @@
 package http3
 
 import (
+	"github.com/Noooste/fhttp/httptrace"
 	"github.com/Noooste/utls"
 	"net"
-	"net/http/httptrace"
 	"net/textproto"
 	"time"
 

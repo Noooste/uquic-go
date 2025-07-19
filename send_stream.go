@@ -9,7 +9,6 @@ import (
 	"github.com/Noooste/uquic-go/internal/ackhandler"
 	"github.com/Noooste/uquic-go/internal/flowcontrol"
 	"github.com/Noooste/uquic-go/internal/protocol"
-	"github.com/Noooste/uquic-go/internal/qerr"
 	"github.com/Noooste/uquic-go/internal/utils"
 	"github.com/Noooste/uquic-go/internal/wire"
 )

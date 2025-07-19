@@ -5,16 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"io"
 	"log/slog"
 	"net"
-	"net/http/httptrace"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Noooste/uquic-go"
-	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/quicvarint"
 
 	"github.com/quic-go/qpack"

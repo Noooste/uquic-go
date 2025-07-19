@@ -3,6 +3,7 @@ package quic
 import (
 	"context"
 	"fmt"
+	"github.com/Noooste/uquic-go/internal/qerr"
 	"sync"
 
 	"github.com/Noooste/uquic-go/internal/protocol"

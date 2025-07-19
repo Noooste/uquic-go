@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"github.com/Noooste/utls"
 	"io"
 	"log/slog"
 	"net"
-	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"sync"
@@ -18,7 +18,6 @@ import (
 	"golang.org/x/net/http/httpguts"
 
 	"github.com/Noooste/uquic-go"
-	"github.com/Noooste/uquic-go/internal/protocol"
 )
 
 // Settings are HTTP/3 settings that apply to the underlying connection.
