@@ -6,8 +6,6 @@ import (
 	"io"
 	"testing"
 
-	mockquic "github.com/Noooste/quic-go/internal/mocks/quic"
-
 	"github.com/quic-go/qpack"
 
 	"github.com/stretchr/testify/require"
