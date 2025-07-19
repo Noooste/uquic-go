@@ -4,18 +4,15 @@ import (
 	"bytes"
 	"context"
 	"github.com/Noooste/fhttp"
+	"github.com/Noooste/fhttp/httptrace"
 	"io"
 	"math"
 	"net/http/httptest"
-	"net/http/httptrace"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Noooste/uquic-go"
-	mockquic "github.com/Noooste/uquic-go/internal/mocks/quic"
-	"github.com/Noooste/uquic-go/internal/protocol"
-
 	"github.com/quic-go/qpack"
 
 	"github.com/stretchr/testify/require"
