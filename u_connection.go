@@ -73,6 +73,7 @@ var newUClientConnection = func(
 		initialPacketNumber,
 		protocol.ByteCount(s.config.InitialPacketSize),
 		s.rttStats,
+		&s.connStats,
 		false, // has no effect
 		s.conn.capabilities().ECN,
 		s.perspective,
