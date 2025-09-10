@@ -1,6 +1,6 @@
 package wire
 
-import "github.com/quic-go/quic-go/internal/protocol"
+import "github.com/Noooste/uquic-go/internal/protocol"
 
 type FrameType uint64
 
