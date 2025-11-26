@@ -3,7 +3,7 @@ package ackhandler
 import (
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
-	"github.com/Noooste/uquic-go/logging"
+	"github.com/Noooste/uquic-go/qlogwriter"
 )
 
 // [UQUIC]
@@ -15,7 +15,7 @@ func NewUAckHandler(
 	clientAddressValidated bool,
 	enableECN bool,
 	pers protocol.Perspective,
-	tracer *logging.ConnectionTracer,
+	tracer qlogwriter.Recorder,
 	logger utils.Logger,
 ) (SentPacketHandler, ReceivedPacketHandler) {
 	sph := newSentPacketHandler(

@@ -7,7 +7,7 @@ import (
 
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
-	"github.com/Noooste/uquic-go/logging"
+	"github.com/Noooste/uquic-go/qlogwriter"
 	tls "github.com/Noooste/utls"
 )
 
@@ -88,12 +88,9 @@ func (t *UTransport) doDial(
 		return nil, t.closeErr
 	}
 
-	var tracer *logging.ConnectionTracer
+	var qlogTrace qlogwriter.Trace
 	if config.Tracer != nil {
-		tracer = config.Tracer(ctx, protocol.PerspectiveClient, destConnID)
-	}
-	if tracer != nil && tracer.StartedConnection != nil {
-		tracer.StartedConnection(sendConn.LocalAddr(), sendConn.RemoteAddr(), srcConnID, destConnID)
+		qlogTrace = config.Tracer(ctx, true, destConnID)
 	}
 
 	logger := utils.DefaultLogger.WithPrefix("client")
@@ -115,7 +112,7 @@ func (t *UTransport) doDial(
 			initialPacketNumber,
 			use0RTT,
 			hasNegotiatedVersion,
-			tracer,
+			qlogTrace,
 			logger,
 			version,
 		)
@@ -133,7 +130,7 @@ func (t *UTransport) doDial(
 			initialPacketNumber,
 			use0RTT,
 			hasNegotiatedVersion,
-			tracer,
+			qlogTrace,
 			logger,
 			version,
 			t.QUICSpec,

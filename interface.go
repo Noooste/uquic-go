@@ -11,7 +11,7 @@ import (
 
 	"github.com/Noooste/uquic-go/internal/handshake"
 	"github.com/Noooste/uquic-go/internal/protocol"
-	"github.com/Noooste/uquic-go/logging"
+	"github.com/Noooste/uquic-go/qlogwriter"
 )
 
 // The StreamID is the ID of a QUIC stream.
@@ -190,7 +190,8 @@ type Config struct {
 	// Enable QUIC Stream Resets with Partial Delivery.
 	// See https://datatracker.ietf.org/doc/html/draft-ietf-quic-reliable-stream-reset-07.
 	EnableStreamResetPartialDelivery bool
-	Tracer                           func(context.Context, logging.Perspective, ConnectionID) *logging.ConnectionTracer
+
+	Tracer func(ctx context.Context, isClient bool, connID ConnectionID) qlogwriter.Trace
 
 	// TLSGetClientHelloSpec is called to get the ClientHelloSpec for the TLS handshake.
 	TLSGetClientHelloSpec func() *tls.ClientHelloSpec

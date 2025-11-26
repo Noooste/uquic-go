@@ -5,8 +5,8 @@ import (
 	"errors"
 	"github.com/Noooste/utls"
 	"io"
-	"time"
 
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/wire"
 )
@@ -38,7 +38,7 @@ type LongHeaderOpener interface {
 type ShortHeaderOpener interface {
 	headerDecryptor
 	DecodePacketNumber(wirePN protocol.PacketNumber, wirePNLen protocol.PacketNumberLen) protocol.PacketNumber
-	Open(dst, src []byte, rcvTime time.Time, pn protocol.PacketNumber, kp protocol.KeyPhaseBit, associatedData []byte) ([]byte, error)
+	Open(dst, src []byte, rcvTime monotime.Time, pn protocol.PacketNumber, kp protocol.KeyPhaseBit, associatedData []byte) ([]byte, error)
 }
 
 // LongHeaderSealer seals a long header packet

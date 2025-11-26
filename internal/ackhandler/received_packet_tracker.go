@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
 	"github.com/Noooste/uquic-go/internal/wire"
@@ -82,7 +83,7 @@ const packetsBeforeAck = 2
 type appDataReceivedPacketTracker struct {
 	receivedPacketTracker
 
-	largestObservedRcvdTime time.Time
+	largestObservedRcvdTime monotime.Time
 
 	largestObserved protocol.PacketNumber
 	ignoreBelow     protocol.PacketNumber
@@ -91,7 +92,7 @@ type appDataReceivedPacketTracker struct {
 	ackQueued   bool // true if we need send a new ACK
 
 	ackElicitingPacketsReceivedSinceLastAck int
-	ackAlarm                                time.Time
+	ackAlarm                                monotime.Time
 
 	logger utils.Logger
 }
@@ -105,7 +106,7 @@ func newAppDataReceivedPacketTracker(logger utils.Logger) *appDataReceivedPacket
 	return h
 }
 
-func (h *appDataReceivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, ackEliciting bool) error {
+func (h *appDataReceivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, ecn protocol.ECN, rcvTime monotime.Time, ackEliciting bool) error {
 	if err := h.receivedPacketTracker.ReceivedPacket(pn, ecn, ackEliciting); err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ func (h *appDataReceivedPacketTracker) ReceivedPacket(pn protocol.PacketNumber, 
 	isMissing := h.isMissing(pn)
 	if !h.ackQueued && h.shouldQueueACK(pn, ecn, isMissing) {
 		h.ackQueued = true
-		h.ackAlarm = time.Time{} // cancel the ack alarm
+		h.ackAlarm = 0 // cancel the ack alarm
 	}
 	if !h.ackQueued {
 		// No ACK queued, but we'll need to acknowledge the packet after max_ack_delay.
@@ -154,6 +155,9 @@ func (h *appDataReceivedPacketTracker) isMissing(p protocol.PacketNumber) bool {
 }
 
 func (h *appDataReceivedPacketTracker) hasNewMissingPackets() bool {
+	if h.lastAck == nil {
+		return false
+	}
 	if h.largestObserved < reorderingThreshold {
 		return false
 	}
@@ -169,12 +173,6 @@ func (h *appDataReceivedPacketTracker) hasNewMissingPackets() bool {
 }
 
 func (h *appDataReceivedPacketTracker) shouldQueueACK(pn protocol.PacketNumber, ecn protocol.ECN, wasMissing bool) bool {
-	// always acknowledge the first packet
-	if h.lastAck == nil {
-		h.logger.Debugf("\tQueueing ACK because the first packet should be acknowledged.")
-		return true
-	}
-
 	// Send an ACK if this packet was reported missing in an ACK sent before.
 	// Ack decimation with reordering relies on the timer to send an ACK, but if
 	// missing packets we reported in the previous ACK, send an ACK immediately.
@@ -207,7 +205,7 @@ func (h *appDataReceivedPacketTracker) shouldQueueACK(pn protocol.PacketNumber, 
 	return false
 }
 
-func (h *appDataReceivedPacketTracker) GetAckFrame(now time.Time, onlyIfQueued bool) *wire.AckFrame {
+func (h *appDataReceivedPacketTracker) GetAckFrame(now monotime.Time, onlyIfQueued bool) *wire.AckFrame {
 	if onlyIfQueued && !h.ackQueued {
 		if h.ackAlarm.IsZero() || h.ackAlarm.After(now) {
 			return nil
@@ -222,9 +220,9 @@ func (h *appDataReceivedPacketTracker) GetAckFrame(now time.Time, onlyIfQueued b
 	}
 	ack.DelayTime = max(0, now.Sub(h.largestObservedRcvdTime))
 	h.ackQueued = false
-	h.ackAlarm = time.Time{}
+	h.ackAlarm = 0
 	h.ackElicitingPacketsReceivedSinceLastAck = 0
 	return ack
 }
 
-func (h *appDataReceivedPacketTracker) GetAlarmTimeout() time.Time { return h.ackAlarm }
+func (h *appDataReceivedPacketTracker) GetAlarmTimeout() monotime.Time { return h.ackAlarm }

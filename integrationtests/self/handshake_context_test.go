@@ -2,14 +2,14 @@ package self_test
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
-	"github.com/Noooste/utls"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/Noooste/uquic-go"
-	"github.com/Noooste/uquic-go/logging"
+	"github.com/Noooste/uquic-go/qlogwriter"
 
 	"github.com/stretchr/testify/require"
 )
@@ -70,7 +70,7 @@ func TestConnContextOnServerSide(t *testing.T) {
 			},
 		},
 		getQuicConfig(&quic.Config{
-			Tracer: func(ctx context.Context, _ logging.Perspective, _ quic.ConnectionID) *logging.ConnectionTracer {
+			Tracer: func(ctx context.Context, _ bool, _ quic.ConnectionID) qlogwriter.Trace {
 				tracerContextChan <- ctx
 				return nil
 			},
@@ -128,7 +128,7 @@ func TestConnContextOnServerSide(t *testing.T) {
 	checkContext(connContextChan, true)
 	checkContext(tracerContextChan, true)
 	checkContext(streamContextChan, true)
-	// github.com/Noooste/utls cancels the context when the TLS handshake completes.
+	// crypto/tls cancels the context when the TLS handshake completes.
 	checkContext(tlsGetConfigForClientContextChan, false)
 	checkContext(tlsGetCertificateContextChan, false)
 }
@@ -236,7 +236,7 @@ func TestContextOnClientSide(t *testing.T) {
 		server.Addr(),
 		tlsConf,
 		getQuicConfig(&quic.Config{
-			Tracer: func(ctx context.Context, _ logging.Perspective, _ quic.ConnectionID) *logging.ConnectionTracer {
+			Tracer: func(ctx context.Context, _ bool, _ quic.ConnectionID) qlogwriter.Trace {
 				tracerContextChan <- ctx
 				return nil
 			},
@@ -283,7 +283,7 @@ func TestContextOnClientSide(t *testing.T) {
 
 	checkContext(conn.Context(), true)
 	checkContext(str.Context(), true)
-	// github.com/Noooste/utls cancels the context when the TLS handshake completes
+	// crypto/tls cancels the context when the TLS handshake completes
 	checkContextFromChan(tlsContextChan, false)
 	checkContextFromChan(tracerContextChan, false)
 }

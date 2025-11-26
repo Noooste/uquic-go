@@ -8,7 +8,7 @@ import (
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
 	"github.com/Noooste/uquic-go/internal/wire"
-	"github.com/Noooste/uquic-go/logging"
+	"github.com/Noooste/uquic-go/qlogwriter"
 	tls "github.com/Noooste/utls"
 )
 
@@ -26,7 +26,7 @@ var newUClientConnection = func(
 	initialPacketNumber protocol.PacketNumber,
 	enable0RTT bool,
 	hasNegotiatedVersion bool,
-	tracer *logging.ConnectionTracer,
+	tracer qlogwriter.Trace,
 	logger utils.Logger,
 	v protocol.Version,
 	uSpec *QUICSpec, // [UQUIC]
@@ -41,7 +41,7 @@ var newUClientConnection = func(
 			perspective:         protocol.PerspectiveClient,
 			logID:               destConnID.String(),
 			logger:              logger,
-			tracer:              tracer,
+			qlogTrace:           tracer,
 			versionNegotiated:   hasNegotiatedVersion,
 			version:             v,
 		},
@@ -77,7 +77,7 @@ var newUClientConnection = func(
 		false, // has no effect
 		s.conn.capabilities().ECN,
 		s.perspective,
-		s.tracer,
+		s.qlogger,
 		s.logger,
 	)
 	s.currentMTUEstimate.Store(uint32(estimateMaxPayloadSize(protocol.ByteCount(s.config.InitialPacketSize))))
@@ -139,16 +139,14 @@ var newUClientConnection = func(
 			params.MaxDatagramFrameSize = protocol.InvalidByteCount
 		}
 	}
-	if s.tracer != nil && s.tracer.SentTransportParameters != nil {
-		s.tracer.SentTransportParameters(params)
-	}
+
 	cs := handshake.NewUCryptoSetupClient(
 		destConnID,
 		params,
 		tlsConf,
 		enable0RTT,
 		s.rttStats,
-		tracer,
+		s.qlogger,
 		logger,
 		s.version,
 		uSpec.ClientHelloSpec,
@@ -157,7 +155,17 @@ var newUClientConnection = func(
 	s.cryptoStreamManager = newCryptoStreamManager(s.initialStream, s.handshakeStream, oneRTTStream)
 	s.unpacker = newPacketUnpacker(cs, s.srcConnIDLen)
 	s.packer = newUPacketPacker(
-		newPacketPacker(srcConnID, s.connIDManager.Get, s.initialStream, s.handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective),
+		newPacketPacker(
+			srcConnID,
+			s.connIDManager.Get,
+			s.initialStream,
+			s.handshakeStream,
+			s.sentPacketHandler,
+			s.retransmissionQueue,
+			cs, s.framer,
+			s.receivedPacketHandler,
+			s.datagramQueue, s.perspective,
+		),
 		uSpec,
 	)
 	if len(tlsConf.ServerName) > 0 {

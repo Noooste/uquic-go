@@ -9,6 +9,7 @@ import (
 
 	"github.com/Noooste/uquic-go/internal/ackhandler"
 	"github.com/Noooste/uquic-go/internal/flowcontrol"
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/wire"
 )
@@ -147,11 +148,11 @@ func (s *Stream) Close() error {
 	return s.sendStr.Close()
 }
 
-func (s *Stream) handleResetStreamFrame(frame *wire.ResetStreamFrame, rcvTime time.Time) error {
+func (s *Stream) handleResetStreamFrame(frame *wire.ResetStreamFrame, rcvTime monotime.Time) error {
 	return s.receiveStr.handleResetStreamFrame(frame, rcvTime)
 }
 
-func (s *Stream) handleStreamFrame(frame *wire.StreamFrame, rcvTime time.Time) error {
+func (s *Stream) handleStreamFrame(frame *wire.StreamFrame, rcvTime monotime.Time) error {
 	return s.receiveStr.handleStreamFrame(frame, rcvTime)
 }
 
@@ -171,7 +172,7 @@ func (s *Stream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version)
 	return s.sendStr.popStreamFrame(maxBytes, v)
 }
 
-func (s *Stream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
+func (s *Stream) getControlFrame(now monotime.Time) (_ ackhandler.Frame, ok, hasMore bool) {
 	f, ok, _ := s.sendStr.getControlFrame(now)
 	if ok {
 		return f, true, true

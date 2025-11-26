@@ -5,14 +5,18 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-	"github.com/Noooste/fhttp"
-	"github.com/Noooste/fhttp/httptest"
 	"io"
+	mrand "math/rand/v2"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/Noooste/uquic-go"
+	"github.com/Noooste/uquic-go/http3/qlog"
+	"github.com/Noooste/uquic-go/qlogwriter"
 	"github.com/Noooste/uquic-go/quicvarint"
+	"github.com/Noooste/uquic-go/testutils/events"
 	"github.com/quic-go/qpack"
 
 	"github.com/stretchr/testify/assert"
@@ -35,7 +39,8 @@ func testClientSettings(t *testing.T, enableDatagrams bool, other map[uint64]uin
 		AdditionalSettings: other,
 	}
 
-	clientConn, serverConn := newConnPair(t)
+	var eventRecorder events.Recorder
+	clientConn, serverConn := newConnPairWithRecorder(t, &eventRecorder, nil)
 	tr.NewClientConn(clientConn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -48,20 +53,42 @@ func testClientSettings(t *testing.T, enableDatagrams bool, other map[uint64]uin
 	require.NoError(t, err)
 	require.EqualValues(t, streamTypeControlStream, typ)
 	fp := (&frameParser{r: str})
-	f, err := fp.ParseNext()
+	f, err := fp.ParseNext(nil)
 	require.NoError(t, err)
 	require.IsType(t, &settingsFrame{}, f)
 	settingsFrame := f.(*settingsFrame)
 	require.Equal(t, settingsFrame.Datagram, enableDatagrams)
 	require.Equal(t, settingsFrame.Other, other)
+
+	var datagramValue *bool
+	if enableDatagrams {
+		datagramValue = pointer(true)
+	}
+	require.Equal(t,
+		[]qlogwriter.Event{
+			qlog.FrameCreated{
+				StreamID: str.StreamID(),
+				Raw:      qlog.RawInfo{Length: 10},
+				Frame: qlog.Frame{
+					Frame: qlog.SettingsFrame{
+						MaxFieldSectionSize: defaultMaxResponseHeaderBytes,
+						Datagram:            datagramValue,
+						Other:               other,
+					},
+				},
+			},
+		},
+		filterQlogEventsForFrame(eventRecorder.Events(qlog.FrameCreated{}), qlog.SettingsFrame{}),
+	)
 }
 
 func encodeResponse(t *testing.T, status int) []byte {
 	mockCtrl := gomock.NewController(t)
 	buf := &bytes.Buffer{}
 	rstr := NewMockDatagramStream(mockCtrl)
+	rstr.EXPECT().StreamID().Return(quic.StreamID(42)).AnyTimes()
 	rstr.EXPECT().Write(gomock.Any()).Do(buf.Write).AnyTimes()
-	rw := newResponseWriter(newStream(rstr, nil, nil, func(r io.Reader, u uint64) error { return nil }), nil, false, nil)
+	rw := newResponseWriter(newStream(rstr, nil, nil, func(io.Reader, *headersFrame) error { return nil }, nil), nil, false, nil)
 	rw.WriteHeader(status)
 	rw.Flush()
 	return buf.Bytes()
@@ -148,6 +175,55 @@ func testClientRequest(t *testing.T, use0RTT bool, method string, rspBytes []byt
 		}
 	}
 	return res.rsp
+}
+
+func randomString(length int) string {
+	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		n := mrand.IntN(len(alphabet))
+		b[i] = alphabet[n]
+	}
+	return string(b)
+}
+
+func TestClientRequestError(t *testing.T) {
+	clientConn, serverConn := newConnPair(t)
+
+	req, err := http.NewRequest(http.MethodGet, "http://quic-go.net", nil)
+	require.NoError(t, err)
+	for range 1000 {
+		req.Header.Add(randomString(50), randomString(50))
+	}
+
+	type result struct {
+		rsp *http.Response
+		err error
+	}
+	resultChan := make(chan result, 1)
+	go func() {
+		cc := (&Transport{}).NewClientConn(clientConn)
+		rsp, err := cc.RoundTrip(req)
+		resultChan <- result{rsp: rsp, err: err}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	str, err := serverConn.AcceptStream(ctx)
+	require.NoError(t, err)
+	str.CancelRead(quic.StreamErrorCode(ErrCodeExcessiveLoad))
+
+	_, err = str.Write(encodeResponse(t, http.StatusTeapot))
+	require.NoError(t, err)
+
+	var res result
+	select {
+	case res = <-resultChan:
+		require.NoError(t, res.err)
+		require.Equal(t, http.StatusTeapot, res.rsp.StatusCode)
+	case <-time.After(time.Second):
+		t.Fatal("timeout")
+	}
 }
 
 func TestClientResponseValidation(t *testing.T) {
@@ -325,8 +401,9 @@ func TestClient1xxHandling(t *testing.T) {
 func testClient1xxHandling(t *testing.T, numEarlyHints int, terminalStatus int, tooMany bool) {
 	var rspBuf bytes.Buffer
 	rstr := NewMockDatagramStream(gomock.NewController(t))
+	rstr.EXPECT().StreamID().Return(quic.StreamID(42)).AnyTimes()
 	rstr.EXPECT().Write(gomock.Any()).Do(rspBuf.Write).AnyTimes()
-	rw := newResponseWriter(newStream(rstr, nil, nil, func(r io.Reader, u uint64) error { return nil }), nil, false, nil)
+	rw := newResponseWriter(newStream(rstr, nil, nil, func(io.Reader, *headersFrame) error { return nil }, nil), nil, false, nil)
 	rw.header.Add("Link", "foo")
 	rw.header.Add("Link", "bar")
 	for range numEarlyHints {
@@ -404,8 +481,9 @@ func testClientGzip(t *testing.T,
 ) {
 	var rspBuf bytes.Buffer
 	rstr := NewMockDatagramStream(gomock.NewController(t))
+	rstr.EXPECT().StreamID().Return(quic.StreamID(42)).AnyTimes()
 	rstr.EXPECT().Write(gomock.Any()).Do(rspBuf.Write).AnyTimes()
-	rw := newResponseWriter(newStream(rstr, nil, nil, func(r io.Reader, u uint64) error { return nil }), nil, false, nil)
+	rw := newResponseWriter(newStream(rstr, nil, nil, func(io.Reader, *headersFrame) error { return nil }, nil), nil, false, nil)
 	rw.WriteHeader(http.StatusOK)
 	if responseAddContentEncoding {
 		rw.header.Add("Content-Encoding", "gzip")

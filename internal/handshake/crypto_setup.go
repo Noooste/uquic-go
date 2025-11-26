@@ -14,7 +14,8 @@ import (
 	"github.com/Noooste/uquic-go/internal/qerr"
 	"github.com/Noooste/uquic-go/internal/utils"
 	"github.com/Noooste/uquic-go/internal/wire"
-	"github.com/Noooste/uquic-go/logging"
+	"github.com/Noooste/uquic-go/qlog"
+	"github.com/Noooste/uquic-go/qlogwriter"
 	"github.com/Noooste/uquic-go/quicvarint"
 )
 
@@ -40,8 +41,8 @@ type cryptoSetup struct {
 
 	rttStats *utils.RTTStats
 
-	tracer *logging.ConnectionTracer
-	logger utils.Logger
+	qlogger qlogwriter.Recorder
+	logger  utils.Logger
 
 	perspective protocol.Perspective
 
@@ -72,7 +73,7 @@ func NewCryptoSetupClient(
 	tlsConf *tls.Config,
 	enable0RTT bool,
 	rttStats *utils.RTTStats,
-	tracer *logging.ConnectionTracer,
+	qlogger qlogwriter.Recorder,
 	logger utils.Logger,
 	version protocol.Version,
 	clientHelloFn func() *tls.ClientHelloSpec,
@@ -81,7 +82,7 @@ func NewCryptoSetupClient(
 		connID,
 		tp,
 		rttStats,
-		tracer,
+		qlogger,
 		logger,
 		protocol.PerspectiveClient,
 		version,
@@ -116,7 +117,7 @@ func NewCryptoSetupServer(
 	tlsConf *tls.Config,
 	allow0RTT bool,
 	rttStats *utils.RTTStats,
-	tracer *logging.ConnectionTracer,
+	qlogger qlogwriter.Recorder,
 	logger utils.Logger,
 	version protocol.Version,
 ) CryptoSetup {
@@ -147,24 +148,30 @@ func newCryptoSetup(
 	connID protocol.ConnectionID,
 	tp *wire.TransportParameters,
 	rttStats *utils.RTTStats,
-	tracer *logging.ConnectionTracer,
+	qlogger qlogwriter.Recorder,
 	logger utils.Logger,
 	perspective protocol.Perspective,
 	version protocol.Version,
 ) *cryptoSetup {
 	initialSealer, initialOpener := NewInitialAEAD(connID, perspective, version)
-	if tracer != nil && tracer.UpdatedKeyFromTLS != nil {
-		tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveClient)
-		tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveServer)
+	if qlogger != nil {
+		qlogger.RecordEvent(qlog.KeyUpdated{
+			Trigger: qlog.KeyUpdateTLS,
+			KeyType: encLevelToKeyType(protocol.EncryptionInitial, protocol.PerspectiveClient),
+		})
+		qlogger.RecordEvent(qlog.KeyUpdated{
+			Trigger: qlog.KeyUpdateTLS,
+			KeyType: encLevelToKeyType(protocol.EncryptionInitial, protocol.PerspectiveServer),
+		})
 	}
 	return &cryptoSetup{
 		initialSealer: initialSealer,
 		initialOpener: initialOpener,
-		aead:          newUpdatableAEAD(rttStats, tracer, logger, version),
+		aead:          newUpdatableAEAD(rttStats, qlogger, logger, version),
 		events:        make([]Event, 0, 16),
 		ourParams:     tp,
 		rttStats:      rttStats,
-		tracer:        tracer,
+		qlogger:       qlogger,
 		logger:        logger,
 		perspective:   perspective,
 		version:       version,
@@ -175,9 +182,15 @@ func (h *cryptoSetup) ChangeConnectionID(id protocol.ConnectionID) {
 	initialSealer, initialOpener := NewInitialAEAD(id, h.perspective, h.version)
 	h.initialSealer = initialSealer
 	h.initialOpener = initialOpener
-	if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-		h.tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveClient)
-		h.tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveServer)
+	if h.qlogger != nil {
+		h.qlogger.RecordEvent(qlog.KeyUpdated{
+			Trigger: qlog.KeyUpdateTLS,
+			KeyType: encLevelToKeyType(protocol.EncryptionInitial, protocol.PerspectiveClient),
+		})
+		h.qlogger.RecordEvent(qlog.KeyUpdated{
+			Trigger: qlog.KeyUpdateTLS,
+			KeyType: encLevelToKeyType(protocol.EncryptionInitial, protocol.PerspectiveServer),
+		})
 	}
 }
 
@@ -384,19 +397,29 @@ func (h *cryptoSetup) GetSessionTicket() ([]byte, error) {
 		// We can't check h.tlsConfig here, since the actual config might have been obtained from
 		// the GetConfigForClient callback.
 		// See https://github.com/golang/go/issues/62032.
-		// Once that issue is resolved, this error assertion can be removed.
+		// This error assertion can be removed once we drop support for Go 1.25.
 		if strings.Contains(err.Error(), "session ticket keys unavailable") {
 			return nil, nil
 		}
 		return nil, err
 	}
-	ev := h.conn.NextEvent()
-	if ev.Kind != tls.QUICWriteData || ev.Level != tls.QUICEncryptionLevelApplication {
-		panic("github.com/Noooste/utls bug: where's my session ticket?")
-	}
-	ticket := ev.Data
-	if ev := h.conn.NextEvent(); ev.Kind != tls.QUICNoEvent {
-		panic("github.com/Noooste/utls bug: why more than one ticket?")
+	// If session tickets are disabled, NextEvent will immediately return QUICNoEvent,
+	// and we will return a nil ticket.
+	var ticket []byte
+	for {
+		ev := h.conn.NextEvent()
+		if ev.Kind == tls.QUICNoEvent {
+			break
+		}
+		if ev.Kind == tls.QUICWriteData && ev.Level == tls.QUICEncryptionLevelApplication {
+			if ticket != nil {
+				h.logger.Errorf("unexpected multiple session tickets")
+				continue
+			}
+			ticket = ev.Data
+		} else {
+			h.logger.Errorf("unexpected event: %v", ev.Kind)
+		}
 	}
 	return ticket, nil
 }
@@ -472,8 +495,11 @@ func (h *cryptoSetup) setReadKey(el tls.QUICEncryptionLevel, suiteID uint16, tra
 		panic("unexpected read encryption level")
 	}
 	h.events = append(h.events, Event{Kind: EventReceivedReadKeys})
-	if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-		h.tracer.UpdatedKeyFromTLS(protocol.FromTLSEncryptionLevel(el), h.perspective.Opposite())
+	if h.qlogger != nil {
+		h.qlogger.RecordEvent(qlog.KeyUpdated{
+			Trigger: qlog.KeyUpdateTLS,
+			KeyType: encLevelToKeyType(protocol.FromTLSEncryptionLevel(el), h.perspective.Opposite()),
+		})
 	}
 }
 
@@ -492,8 +518,11 @@ func (h *cryptoSetup) setWriteKey(el tls.QUICEncryptionLevel, suiteID uint16, tr
 		if h.logger.Debug() {
 			h.logger.Debugf("Installed 0-RTT Write keys (using %s)", tls.CipherSuiteName(suite.ID))
 		}
-		if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-			h.tracer.UpdatedKeyFromTLS(protocol.Encryption0RTT, h.perspective)
+		if h.qlogger != nil {
+			h.qlogger.RecordEvent(qlog.KeyUpdated{
+				Trigger: qlog.KeyUpdateTLS,
+				KeyType: encLevelToKeyType(protocol.Encryption0RTT, h.perspective),
+			})
 		}
 		// don't set used0RTT here. 0-RTT might still get rejected.
 		return
@@ -516,15 +545,18 @@ func (h *cryptoSetup) setWriteKey(el tls.QUICEncryptionLevel, suiteID uint16, tr
 			h.used0RTT.Store(true)
 			h.zeroRTTSealer = nil
 			h.logger.Debugf("Dropping 0-RTT keys.")
-			if h.tracer != nil && h.tracer.DroppedEncryptionLevel != nil {
-				h.tracer.DroppedEncryptionLevel(protocol.Encryption0RTT)
+			if h.qlogger != nil {
+				h.qlogger.RecordEvent(qlog.KeyDiscarded{KeyType: qlog.KeyTypeClient0RTT})
 			}
 		}
 	default:
 		panic("unexpected write encryption level")
 	}
-	if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-		h.tracer.UpdatedKeyFromTLS(protocol.FromTLSEncryptionLevel(el), h.perspective)
+	if h.qlogger != nil {
+		h.qlogger.RecordEvent(qlog.KeyUpdated{
+			Trigger: qlog.KeyUpdateTLS,
+			KeyType: encLevelToKeyType(protocol.FromTLSEncryptionLevel(el), h.perspective),
+		})
 	}
 }
 
@@ -549,6 +581,10 @@ func (h *cryptoSetup) DiscardInitialKeys() {
 	h.initialSealer = nil
 	if dropped {
 		h.logger.Debugf("Dropping Initial keys.")
+		if h.qlogger != nil {
+			h.qlogger.RecordEvent(qlog.KeyDiscarded{KeyType: qlog.KeyTypeClientInitial})
+			h.qlogger.RecordEvent(qlog.KeyDiscarded{KeyType: qlog.KeyTypeServerInitial})
+		}
 	}
 }
 
@@ -568,6 +604,10 @@ func (h *cryptoSetup) SetHandshakeConfirmed() {
 	}
 	if dropped {
 		h.logger.Debugf("Dropping Handshake keys.")
+		if h.qlogger != nil {
+			h.qlogger.RecordEvent(qlog.KeyDiscarded{KeyType: qlog.KeyTypeClientHandshake})
+			h.qlogger.RecordEvent(qlog.KeyDiscarded{KeyType: qlog.KeyTypeServerHandshake})
+		}
 	}
 }
 
@@ -635,8 +675,8 @@ func (h *cryptoSetup) Get1RTTOpener() (ShortHeaderOpener, error) {
 	if h.zeroRTTOpener != nil && time.Since(h.handshakeCompleteTime) > 3*h.rttStats.PTO(true) {
 		h.zeroRTTOpener = nil
 		h.logger.Debugf("Dropping 0-RTT keys.")
-		if h.tracer != nil && h.tracer.DroppedEncryptionLevel != nil {
-			h.tracer.DroppedEncryptionLevel(protocol.Encryption0RTT)
+		if h.qlogger != nil {
+			h.qlogger.RecordEvent(qlog.KeyDiscarded{KeyType: qlog.KeyTypeClient0RTT})
 		}
 	}
 
@@ -658,4 +698,33 @@ func wrapError(err error) error {
 		return qerr.NewLocalCryptoError(uint8(alertErr), err)
 	}
 	return &qerr.TransportError{ErrorCode: qerr.InternalError, ErrorMessage: err.Error()}
+}
+
+func encLevelToKeyType(encLevel protocol.EncryptionLevel, pers protocol.Perspective) qlog.KeyType {
+	if pers == protocol.PerspectiveServer {
+		switch encLevel {
+		case protocol.EncryptionInitial:
+			return qlog.KeyTypeServerInitial
+		case protocol.EncryptionHandshake:
+			return qlog.KeyTypeServerHandshake
+		case protocol.Encryption0RTT:
+			return qlog.KeyTypeServer0RTT
+		case protocol.Encryption1RTT:
+			return qlog.KeyTypeServer1RTT
+		default:
+			return ""
+		}
+	}
+	switch encLevel {
+	case protocol.EncryptionInitial:
+		return qlog.KeyTypeClientInitial
+	case protocol.EncryptionHandshake:
+		return qlog.KeyTypeClientHandshake
+	case protocol.Encryption0RTT:
+		return qlog.KeyTypeClient0RTT
+	case protocol.Encryption1RTT:
+		return qlog.KeyTypeClient1RTT
+	default:
+		return ""
+	}
 }

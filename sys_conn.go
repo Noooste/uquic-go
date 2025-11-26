@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
 )
@@ -123,7 +124,7 @@ func (c *basicConn) ReadPacket() (receivedPacket, error) {
 	}
 	return receivedPacket{
 		remoteAddr: addr,
-		rcvTime:    time.Now(),
+		rcvTime:    monotime.Now(),
 		data:       buffer.Data[:n],
 		buffer:     buffer,
 	}, nil

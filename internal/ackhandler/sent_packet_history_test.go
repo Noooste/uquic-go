@@ -3,8 +3,8 @@ package ackhandler
 import (
 	"slices"
 	"testing"
-	"time"
 
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ func TestSentPacketHistoryPacketTracking(t *testing.T) {
 
 func testSentPacketHistoryPacketTracking(t *testing.T, firstPacketAckEliciting bool) {
 	hist := newSentPacketHistory(true)
-	now := time.Now()
+	now := monotime.Now()
 
 	var firstPacketNumber []protocol.PacketNumber
 	require.False(t, hist.HasOutstandingPackets())

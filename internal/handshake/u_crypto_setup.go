@@ -7,12 +7,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Noooste/uquic-go/qlogwriter"
 	tls "github.com/Noooste/utls"
 
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
 	"github.com/Noooste/uquic-go/internal/wire"
-	"github.com/Noooste/uquic-go/logging"
 	"github.com/Noooste/uquic-go/quicvarint"
 )
 
@@ -32,7 +32,7 @@ type uCryptoSetup struct {
 
 	rttStats *utils.RTTStats
 
-	tracer *logging.ConnectionTracer
+	tracer qlogwriter.Recorder
 	logger utils.Logger
 
 	perspective protocol.Perspective
@@ -65,7 +65,7 @@ func NewUCryptoSetupClient(
 	tlsConf *tls.Config,
 	enable0RTT bool,
 	rttStats *utils.RTTStats,
-	tracer *logging.ConnectionTracer,
+	tracer qlogwriter.Recorder,
 	logger utils.Logger,
 	version protocol.Version,
 	chs *tls.ClientHelloSpec,
@@ -103,24 +103,21 @@ func newUCryptoSetup(
 	connID protocol.ConnectionID,
 	tp *wire.TransportParameters,
 	rttStats *utils.RTTStats,
-	tracer *logging.ConnectionTracer,
+	qlogger qlogwriter.Recorder,
 	logger utils.Logger,
 	perspective protocol.Perspective,
 	version protocol.Version,
 ) *uCryptoSetup {
 	initialSealer, initialOpener := NewInitialAEAD(connID, perspective, version)
-	if tracer != nil && tracer.UpdatedKeyFromTLS != nil {
-		tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveClient)
-		tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveServer)
-	}
+
 	return &uCryptoSetup{
 		initialSealer: initialSealer,
 		initialOpener: initialOpener,
-		aead:          newUpdatableAEAD(rttStats, tracer, logger, version),
+		aead:          newUpdatableAEAD(rttStats, qlogger, logger, version),
 		events:        make([]Event, 0, 16),
 		ourParams:     tp,
 		rttStats:      rttStats,
-		tracer:        tracer,
+		tracer:        qlogger,
 		logger:        logger,
 		perspective:   perspective,
 		version:       version,
@@ -131,10 +128,6 @@ func (h *uCryptoSetup) ChangeConnectionID(id protocol.ConnectionID) {
 	initialSealer, initialOpener := NewInitialAEAD(id, h.perspective, h.version)
 	h.initialSealer = initialSealer
 	h.initialOpener = initialOpener
-	if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-		h.tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveClient)
-		h.tracer.UpdatedKeyFromTLS(protocol.EncryptionInitial, protocol.PerspectiveServer)
-	}
 }
 
 func (h *uCryptoSetup) SetLargest1RTTAcked(pn protocol.PacketNumber) error {
@@ -411,9 +404,6 @@ func (h *uCryptoSetup) setReadKey(el tls.QUICEncryptionLevel, suiteID uint16, tr
 		panic("unexpected read encryption level")
 	}
 	h.events = append(h.events, Event{Kind: EventReceivedReadKeys})
-	if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-		h.tracer.UpdatedKeyFromTLS(protocol.FromTLSEncryptionLevel(el), h.perspective.Opposite())
-	}
 }
 
 func (h *uCryptoSetup) setWriteKey(el tls.QUICEncryptionLevel, suiteID uint16, trafficSecret []byte) {
@@ -430,9 +420,6 @@ func (h *uCryptoSetup) setWriteKey(el tls.QUICEncryptionLevel, suiteID uint16, t
 		)
 		if h.logger.Debug() {
 			h.logger.Debugf("Installed 0-RTT Write keys (using %s)", tls.CipherSuiteName(suite.ID))
-		}
-		if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-			h.tracer.UpdatedKeyFromTLS(protocol.Encryption0RTT, h.perspective)
 		}
 		// don't set used0RTT here. 0-RTT might still get rejected.
 		return
@@ -455,15 +442,9 @@ func (h *uCryptoSetup) setWriteKey(el tls.QUICEncryptionLevel, suiteID uint16, t
 			h.used0RTT.Store(true)
 			h.zeroRTTSealer = nil
 			h.logger.Debugf("Dropping 0-RTT keys.")
-			if h.tracer != nil && h.tracer.DroppedEncryptionLevel != nil {
-				h.tracer.DroppedEncryptionLevel(protocol.Encryption0RTT)
-			}
 		}
 	default:
 		panic("unexpected write encryption level")
-	}
-	if h.tracer != nil && h.tracer.UpdatedKeyFromTLS != nil {
-		h.tracer.UpdatedKeyFromTLS(protocol.FromTLSEncryptionLevel(el), h.perspective)
 	}
 }
 
@@ -574,9 +555,6 @@ func (h *uCryptoSetup) Get1RTTOpener() (ShortHeaderOpener, error) {
 	if h.zeroRTTOpener != nil && time.Since(h.handshakeCompleteTime) > 3*h.rttStats.PTO(true) {
 		h.zeroRTTOpener = nil
 		h.logger.Debugf("Dropping 0-RTT keys.")
-		if h.tracer != nil && h.tracer.DroppedEncryptionLevel != nil {
-			h.tracer.DroppedEncryptionLevel(protocol.Encryption0RTT)
-		}
 	}
 
 	if !h.has1RTTOpener {

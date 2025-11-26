@@ -3,9 +3,9 @@ package quic
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	"github.com/Noooste/uquic-go/internal/handshake"
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/wire"
 	"github.com/gaukas/clienthellod"
@@ -36,7 +36,7 @@ func newUPacketPacker(
 // PackCoalescedPacket packs a new packet.
 // It packs an Initial / Handshake if there is data to send in these packet number spaces.
 // It should only be called before the handshake is confirmed.
-func (p *uPacketPacker) PackCoalescedPacket(onlyAck bool, maxSize protocol.ByteCount, now time.Time, v protocol.Version) (*coalescedPacket, error) {
+func (p *uPacketPacker) PackCoalescedPacket(onlyAck bool, maxSize protocol.ByteCount, now monotime.Time, v protocol.Version) (*coalescedPacket, error) {
 	var (
 		initialHdr, handshakeHdr, zeroRTTHdr                            *wire.ExtendedHeader
 		initialPayload, handshakePayload, zeroRTTPayload, oneRTTPayload payload
@@ -316,7 +316,7 @@ func (p *uPacketPacker) PackPTOProbePacket(
 	encLevel protocol.EncryptionLevel,
 	maxPacketSize protocol.ByteCount,
 	addPingIfEmpty bool,
-	now time.Time,
+	now monotime.Time,
 	v protocol.Version,
 ) (*coalescedPacket, error) {
 	if encLevel == protocol.Encryption1RTT {

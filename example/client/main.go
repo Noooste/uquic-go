@@ -2,19 +2,19 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"github.com/Noooste/fhttp"
-	"github.com/Noooste/utls"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"sync"
 
 	"github.com/Noooste/uquic-go"
 	"github.com/Noooste/uquic-go/http3"
+	"github.com/Noooste/uquic-go/http3/qlog"
 	"github.com/Noooste/uquic-go/internal/testdata"
-	"github.com/Noooste/uquic-go/qlog"
 )
 
 func main() {

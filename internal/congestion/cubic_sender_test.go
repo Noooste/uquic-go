@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Noooste/uquic-go/internal/monotime"
 	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/utils"
 
@@ -16,14 +17,14 @@ const (
 	defaultWindowTCP               = protocol.ByteCount(initialCongestionWindowPackets) * maxDatagramSize
 )
 
-type mockClock time.Time
+type mockClock monotime.Time
 
-func (c *mockClock) Now() time.Time {
-	return time.Time(*c)
+func (c *mockClock) Now() monotime.Time {
+	return monotime.Time(*c)
 }
 
 func (c *mockClock) Advance(d time.Duration) {
-	*c = mockClock(time.Time(*c).Add(d))
+	*c = mockClock(monotime.Time(*c).Add(d))
 }
 
 const MaxCongestionWindow = 200 * maxDatagramSize
@@ -38,7 +39,7 @@ type testCubicSender struct {
 }
 
 func newTestCubicSender(cubic bool) *testCubicSender {
-	clock := mockClock{}
+	var clock mockClock
 	rttStats := utils.RTTStats{}
 	return &testCubicSender{
 		clock:        &clock,
@@ -132,7 +133,7 @@ func TestCubicSenderPacing(t *testing.T) {
 	// Check that we can't send immediately due to pacing
 	delay := sender.sender.TimeUntilSend(sender.bytesInFlight)
 	require.NotZero(t, delay)
-	require.Less(t, delay.Sub(time.Time(*sender.clock)), time.Hour)
+	require.Less(t, delay.Sub(monotime.Time(*sender.clock)), time.Hour)
 }
 
 func TestCubicSenderApplicationLimitedSlowStart(t *testing.T) {
@@ -161,7 +162,6 @@ func TestCubicSenderExponentialSlowStart(t *testing.T) {
 	// At startup make sure we can send.
 	require.True(t, sender.sender.CanSend(0))
 	require.Zero(t, sender.sender.TimeUntilSend(0))
-	require.Equal(t, infBandwidth, sender.sender.BandwidthEstimate())
 
 	const numberOfAcks = 20
 	for range numberOfAcks {
@@ -489,7 +489,7 @@ func TestCubicSenderResetAfterConnectionMigration(t *testing.T) {
 }
 
 func TestCubicSenderSlowStartsUpToMaximumCongestionWindow(t *testing.T) {
-	clock := mockClock{}
+	var clock mockClock
 	rttStats := utils.RTTStats{}
 	const initialMaxCongestionWindow = protocol.MaxCongestionWindowPackets * initialMaxDatagramSize
 	sender := newCubicSender(
@@ -516,7 +516,7 @@ func TestCubicSenderMaximumPacketSizeReduction(t *testing.T) {
 }
 
 func TestCubicSenderSlowStartsPacketSizeIncrease(t *testing.T) {
-	clock := mockClock{}
+	var clock mockClock
 	rttStats := utils.RTTStats{}
 	const initialMaxCongestionWindow = protocol.MaxCongestionWindowPackets * initialMaxDatagramSize
 	sender := newCubicSender(
@@ -541,7 +541,7 @@ func TestCubicSenderSlowStartsPacketSizeIncrease(t *testing.T) {
 
 func TestCubicSenderLimitCwndIncreaseInCongestionAvoidance(t *testing.T) {
 	// Enable Cubic.
-	clock := mockClock{}
+	var clock mockClock
 	rttStats := utils.RTTStats{}
 	sender := newCubicSender(
 		&clock,

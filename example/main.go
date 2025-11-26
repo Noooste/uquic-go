@@ -5,10 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Noooste/fhttp"
 	"io"
 	"log"
 	"mime/multipart"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,8 +17,8 @@ import (
 
 	"github.com/Noooste/uquic-go"
 	"github.com/Noooste/uquic-go/http3"
+	"github.com/Noooste/uquic-go/http3/qlog"
 	"github.com/Noooste/uquic-go/internal/testdata"
-	"github.com/Noooste/uquic-go/qlog"
 )
 
 type binds []string
