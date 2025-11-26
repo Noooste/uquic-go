@@ -332,6 +332,16 @@ func (f *settingsFrame) Append(b []byte) []byte {
 			continue
 		}
 
+		if id == SettingsMaxFieldSectionSize && f.MaxFieldSectionSize >= 0 {
+			// We already added this setting.
+			continue
+		}
+
+		if id == settingExtendedConnect && f.ExtendedConnect {
+			// We already added this setting.
+			continue
+		}
+
 		if id == SettingsGREASE && val == 0 {
 			// generate a GREASE value
 			key := 0x1f*uint64(rand.Int32()) + 0x21
