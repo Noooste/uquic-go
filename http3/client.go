@@ -12,11 +12,9 @@ import (
 
 	"github.com/Noooste/fhttp"
 	"github.com/Noooste/fhttp/httptrace"
-	"github.com/Noooste/uquic-go/http3/qlog"
-
 	"github.com/Noooste/uquic-go"
+	"github.com/Noooste/uquic-go/http3/qlog"
 	"github.com/Noooste/uquic-go/quicvarint"
-
 	"github.com/quic-go/qpack"
 )
 

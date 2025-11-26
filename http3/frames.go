@@ -181,10 +181,10 @@ func (f *headersFrame) Append(b []byte) []byte {
 
 const (
 	SettingsQpackMaxTableCapacity uint64 = 0x1
-	SettingsMaxFieldSectionSize   uint64 = 0x6
 	SettingsQpackBlockedStreams   uint64 = 0x7
+
 	// SETTINGS_MAX_FIELD_SECTION_SIZE
-	settingMaxFieldSectionSize = 0x6
+	SettingsMaxFieldSectionSize = 0x6
 	// Extended CONNECT, RFC 9220
 	settingExtendedConnect uint64 = 0x8
 	// SettingsH3Datagram is used to enable HTTP datagrams, RFC 9297
@@ -233,7 +233,7 @@ func parseSettingsFrame(r *countingByteReader, l uint64, streamID quic.StreamID,
 		}
 
 		switch id {
-		case settingMaxFieldSectionSize:
+		case SettingsMaxFieldSectionSize:
 			if readMaxFieldSectionSize {
 				return nil, fmt.Errorf("duplicate setting: %d", id)
 			}
@@ -293,7 +293,7 @@ func (f *settingsFrame) Append(b []byte) []byte {
 	b = quicvarint.Append(b, 0x4)
 	var l int
 	if f.MaxFieldSectionSize >= 0 {
-		l += quicvarint.Len(settingMaxFieldSectionSize) + quicvarint.Len(uint64(f.MaxFieldSectionSize))
+		l += quicvarint.Len(SettingsMaxFieldSectionSize) + quicvarint.Len(uint64(f.MaxFieldSectionSize))
 	}
 	for id, val := range f.Other {
 		if id == SettingsGREASE {
@@ -315,7 +315,7 @@ func (f *settingsFrame) Append(b []byte) []byte {
 	}
 	b = quicvarint.Append(b, uint64(l))
 	if f.MaxFieldSectionSize >= 0 {
-		b = quicvarint.Append(b, settingMaxFieldSectionSize)
+		b = quicvarint.Append(b, SettingsMaxFieldSectionSize)
 		b = quicvarint.Append(b, uint64(f.MaxFieldSectionSize))
 	}
 	if f.Datagram {
