@@ -292,9 +292,9 @@ func parseSettingsFrame(r *countingByteReader, l uint64, streamID quic.StreamID,
 func (f *settingsFrame) Append(b []byte) []byte {
 	b = quicvarint.Append(b, 0x4)
 	var l int
-	if f.MaxFieldSectionSize >= 0 {
-		l += quicvarint.Len(SettingsMaxFieldSectionSize) + quicvarint.Len(uint64(f.MaxFieldSectionSize))
-	}
+	//if f.MaxFieldSectionSize >= 0 {
+	//	l += quicvarint.Len(SettingsMaxFieldSectionSize) + quicvarint.Len(uint64(f.MaxFieldSectionSize))
+	//}
 	for id, val := range f.Other {
 		if id == SettingsGREASE {
 			l += quicvarint.Len(quicvarint.Max)
@@ -314,10 +314,10 @@ func (f *settingsFrame) Append(b []byte) []byte {
 		l += quicvarint.Len(settingExtendedConnect) + quicvarint.Len(1)
 	}
 	b = quicvarint.Append(b, uint64(l))
-	if f.MaxFieldSectionSize >= 0 {
-		b = quicvarint.Append(b, SettingsMaxFieldSectionSize)
-		b = quicvarint.Append(b, uint64(f.MaxFieldSectionSize))
-	}
+	//if f.MaxFieldSectionSize >= 0 {
+	//	b = quicvarint.Append(b, SettingsMaxFieldSectionSize)
+	//	b = quicvarint.Append(b, uint64(f.MaxFieldSectionSize))
+	//}
 	if f.Datagram {
 		b = quicvarint.Append(b, SettingsH3Datagram)
 		b = quicvarint.Append(b, 1)
