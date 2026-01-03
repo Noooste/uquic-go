@@ -11,7 +11,6 @@ import (
 	"io"
 	mrand "math/rand/v2"
 	"net"
-	"net/http"
 	"net/http/httptrace"
 	"net/textproto"
 	"os"
@@ -21,12 +20,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Noooste/fhttp"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Noooste/uquic-go"
 	"github.com/Noooste/uquic-go/http3"
 	"github.com/Noooste/uquic-go/http3/qlog"
 	quicproxy "github.com/Noooste/uquic-go/integrationtests/tools/proxy"
+	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/testutils/events"
 
 	"github.com/stretchr/testify/assert"
@@ -375,7 +377,7 @@ func testHTTPHeaderSizeLimitClient(t *testing.T, hdr http.Header, limit int) (he
 	return headersFrameSize, requestErr
 }
 
-func TestHTTPTrailers(t *testing.T) {
+func TestHTTPResponseTrailers(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/trailers", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Trailer", "AtEnd1, AtEnd2")
@@ -424,6 +426,87 @@ func TestHTTPTrailers(t *testing.T) {
 		"Last":        {"value 3"},
 		"Unannounced": {"Surprise!"},
 	}), resp.Trailer)
+}
+
+func TestHTTPRequestTrailers(t *testing.T) {
+	trailerChan := make(chan http.Header, 2)
+	bodyChan := make(chan string, 1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/client-trailers", func(w http.ResponseWriter, r *http.Request) {
+		trailerBeforeBody := make(http.Header)
+		for k, v := range r.Trailer {
+			trailerBeforeBody[k] = v
+		}
+		trailerChan <- trailerBeforeBody
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		bodyChan <- string(body)
+
+		trailer := make(http.Header)
+		for k, v := range r.Trailer {
+			trailer[k] = v
+		}
+		trailerChan <- trailer
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	port := startHTTPServer(t, mux)
+
+	pr, pw := io.Pipe()
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("https://localhost:%d/client-trailers", port), pr)
+	require.NoError(t, err)
+	req.Trailer = http.Header{
+		"Trailer1": nil,
+		"Trailer2": {"to-be-updated"},
+	}
+
+	go func() {
+		// send the first half of the body
+		pw.Write(PRData[:len(PRData)/2])
+		// then update the trailer values
+		req.Trailer.Set("Trailer1", "foo")
+		req.Trailer.Set("Trailer2", "bar")
+		req.Trailer.Set("Trailer3", "baz")
+		// send the rest of the body
+		pw.Write(PRData[len(PRData)/2:])
+		pw.Close()
+	}()
+
+	resp, err := newHTTP3Client(t).Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	select {
+	case trailersBefore := <-trailerChan:
+		// trailers before body should have announced keys with nil values
+		require.Equal(t, http.Header(map[string][]string{"Trailer1": nil, "Trailer2": nil}), trailersBefore)
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for trailer announcement")
+	}
+
+	select {
+	case body := <-bodyChan:
+		require.Equal(t, string(PRData), body)
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for body")
+	}
+
+	select {
+	case trailers := <-trailerChan:
+		require.Equal(t, http.Header(map[string][]string{
+			"Trailer1": {"foo"},
+			"Trailer2": {"bar"},
+			"Trailer3": {"baz"},
+		}), trailers)
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for trailers")
+	}
 }
 
 func TestHTTPErrAbortHandler(t *testing.T) {
@@ -817,16 +900,11 @@ func TestHTTPConnContext(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var tracingID quic.ConnectionTracingID
 	select {
 	case ctx := <-connCtxChan:
 		serv, ok := ctx.Value(http3.ServerContextKey).(*http3.Server)
 		require.True(t, ok)
 		require.Equal(t, server, serv)
-
-		id, ok := ctx.Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID)
-		require.True(t, ok)
-		tracingID = id
 	default:
 		t.Fatal("handler was not called")
 	}
@@ -840,10 +918,6 @@ func TestHTTPConnContext(t *testing.T) {
 		serv, ok := ctx.Value(http3.ServerContextKey).(*http3.Server)
 		require.True(t, ok)
 		require.Equal(t, server, serv)
-
-		id, ok := ctx.Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID)
-		require.True(t, ok)
-		require.Equal(t, tracingID, id)
 	default:
 		t.Fatal("handler was not called")
 	}
@@ -1009,7 +1083,7 @@ func TestHTTP0RTT(t *testing.T) {
 		Conn:       newUDPConnLocalhost(t),
 		ServerAddr: &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port},
 		DelayPacket: func(_ quicproxy.Direction, _, _ net.Addr, data []byte) time.Duration {
-			if contains0RTTPacket(data) {
+			if containsPacketType(data, protocol.PacketType0RTT) {
 				num0RTTPackets.Add(1)
 			}
 			return scaleDuration(25 * time.Millisecond)

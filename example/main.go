@@ -8,10 +8,11 @@ import (
 	"io"
 	"log"
 	"mime/multipart"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/Noooste/fhttp"
 
 	_ "net/http/pprof"
 

@@ -99,9 +99,6 @@ func (e *errCloseForRecreating) Error() string {
 
 var deadlineSendImmediately = monotime.Time(42 * time.Millisecond) // any value > time.Time{} and before time.Now() is fine
 
-var connTracingID atomic.Uint64              // to be accessed atomically
-func nextConnTracingID() ConnectionTracingID { return ConnectionTracingID(connTracingID.Add(1)) }
-
 type blockMode uint8
 
 const (
@@ -313,13 +310,14 @@ var newConnection = func(
 	)
 	s.preSetup()
 	s.rttStats.SetInitialRTT(rtt)
-	s.sentPacketHandler, s.receivedPacketHandler = ackhandler.NewAckHandler(
+	s.sentPacketHandler = ackhandler.NewSentPacketHandler(
 		0,
 		protocol.ByteCount(s.config.InitialPacketSize),
 		s.rttStats,
 		&s.connStats,
 		clientAddressValidated,
 		s.conn.capabilities().ECN,
+		s.receivedPacketHandler.IgnorePacketsBelow,
 		s.perspective,
 		s.qlogger,
 		s.logger,
@@ -370,7 +368,7 @@ var newConnection = func(
 		s.version,
 	)
 	s.cryptoStreamHandler = cs
-	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, s.initialStream, s.handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective)
+	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, s.initialStream, s.handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, &s.receivedPacketHandler, s.datagramQueue, s.perspective)
 	s.unpacker = newPacketUnpacker(cs, s.srcConnIDLen)
 	s.cryptoStreamManager = newCryptoStreamManager(s.initialStream, s.handshakeStream, s.oneRTTStream)
 	return &wrappedConn{Conn: s}
@@ -441,13 +439,14 @@ var newClientConnection = func(
 	)
 	s.ctx, s.ctxCancel = context.WithCancelCause(ctx)
 	s.preSetup()
-	s.sentPacketHandler, s.receivedPacketHandler = ackhandler.NewAckHandler(
+	s.sentPacketHandler = ackhandler.NewSentPacketHandler(
 		initialPacketNumber,
 		protocol.ByteCount(s.config.InitialPacketSize),
 		s.rttStats,
 		&s.connStats,
 		false, // has no effect
 		s.conn.capabilities().ECN,
+		s.receivedPacketHandler.IgnorePacketsBelow,
 		s.perspective,
 		s.qlogger,
 		s.logger,
@@ -496,7 +495,7 @@ var newClientConnection = func(
 	s.cryptoStreamHandler = cs
 	s.cryptoStreamManager = newCryptoStreamManager(s.initialStream, s.handshakeStream, oneRTTStream)
 	s.unpacker = newPacketUnpacker(cs, s.srcConnIDLen)
-	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, s.initialStream, s.handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective)
+	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, s.initialStream, s.handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, &s.receivedPacketHandler, s.datagramQueue, s.perspective)
 	if len(tlsConf.ServerName) > 0 {
 		s.tokenStoreKey = tlsConf.ServerName
 	} else {
@@ -555,6 +554,8 @@ func (c *Conn) preSetup() {
 	now := monotime.Now()
 	c.lastPacketReceivedTime = now
 	c.creationTime = now
+
+	c.receivedPacketHandler = *ackhandler.NewReceivedPacketHandler(c.logger)
 
 	c.datagramQueue = newDatagramQueue(c.scheduleSending, c.logger)
 	c.connState.Version = c.version
@@ -992,24 +993,22 @@ func (c *Conn) handleHandshakeConfirmed(now monotime.Time) error {
 	return nil
 }
 
+const maxPacketsToProcess = 32
+
 func (c *Conn) handlePackets() (wasProcessed bool, _ error) {
-	// Now process all packets in the receivedPackets channel.
-	// Limit the number of packets to the length of the receivedPackets channel,
+	// Process packets from the receivedPackets queue.
+	// Limit the number of packets to process to maxPacketsToProcess,
 	// so we eventually get a chance to send out an ACK when receiving a lot of packets.
 	c.receivedPacketMx.Lock()
-	numPackets := c.receivedPackets.Len()
-	if numPackets == 0 {
+
+	if c.receivedPackets.Empty() {
 		c.receivedPacketMx.Unlock()
 		return false, nil
 	}
 
 	var hasMorePackets bool
-	for i := 0; i < numPackets; i++ {
-		if i > 0 {
-			c.receivedPacketMx.Lock()
-		}
+	for range maxPacketsToProcess {
 		p := c.receivedPackets.PopFront()
-		hasMorePackets = !c.receivedPackets.Empty()
 		c.receivedPacketMx.Unlock()
 
 		var datagramID qlog.DatagramID
@@ -1023,14 +1022,19 @@ func (c *Conn) handlePackets() (wasProcessed bool, _ error) {
 		if processed {
 			wasProcessed = true
 		}
+		c.receivedPacketMx.Lock()
+		hasMorePackets = !c.receivedPackets.Empty()
 		if !hasMorePackets {
 			break
 		}
-		// only process a single packet at a time before handshake completion
-		if !c.handshakeComplete {
+		// Prioritize sending of new CRYPTO data.
+		// This is especially relevant when processing 0-RTT packets.
+		if !c.handshakeComplete && (c.initialStream.HasData() || c.handshakeStream.HasData()) {
 			break
 		}
 	}
+	c.receivedPacketMx.Unlock()
+
 	if hasMorePackets {
 		select {
 		case c.notifyReceivedPacket <- struct{}{}:
@@ -1044,8 +1048,7 @@ func (c *Conn) handleOnePacket(rp receivedPacket, datagramID qlog.DatagramID) (w
 	c.sentPacketHandler.ReceivedBytes(rp.Size(), rp.rcvTime)
 
 	if wire.IsVersionNegotiationPacket(rp.data) {
-		c.handleVersionNegotiationPacket(rp)
-		return false, nil
+		return false, c.handleVersionNegotiationPacket(rp)
 	}
 
 	var counter uint8
@@ -1557,7 +1560,7 @@ func (c *Conn) handleRetryPacket(hdr *wire.Header, data []byte, rcvTime monotime
 	return true
 }
 
-func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
+func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) error {
 	if c.perspective == protocol.PerspectiveServer || // servers never receive version negotiation packets
 		c.receivedFirstPacket || c.versionNegotiated { // ignore delayed / duplicated version negotiation packets
 		if c.qlogger != nil {
@@ -1567,7 +1570,7 @@ func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
 				Trigger: qlog.PacketDropUnexpectedPacket,
 			})
 		}
-		return
+		return nil
 	}
 
 	src, dest, supportedVersions, err := wire.ParseVersionNegotiationPacket(p.data)
@@ -1580,7 +1583,7 @@ func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
 			})
 		}
 		c.logger.Debugf("Error parsing Version Negotiation packet: %s", err)
-		return
+		return nil
 	}
 
 	if slices.Contains(supportedVersions, c.version) {
@@ -1593,7 +1596,7 @@ func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
 		}
 		// The Version Negotiation packet contains the version that we offered.
 		// This might be a packet sent by an attacker, or it was corrupted.
-		return
+		return nil
 	}
 
 	c.logger.Infof("Received a Version Negotiation packet. Supported Versions: %s", supportedVersions)
@@ -1613,7 +1616,7 @@ func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
 			Theirs: supportedVersions,
 		})
 		c.logger.Infof("No compatible QUIC version found.")
-		return
+		return nil
 	}
 	if c.qlogger != nil {
 		c.qlogger.RecordEvent(qlog.VersionInformation{
@@ -1625,10 +1628,10 @@ func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
 
 	c.logger.Infof("Switching to QUIC version %s.", newVersion)
 	nextPN, _ := c.sentPacketHandler.PeekPacketNumber(protocol.EncryptionInitial)
-	c.destroyImpl(&errCloseForRecreating{
+	return &errCloseForRecreating{
 		nextPacketNumber: nextPN,
 		nextVersion:      newVersion,
-	})
+	}
 }
 
 func (c *Conn) handleUnpackedLongHeaderPacket(
@@ -1731,6 +1734,7 @@ func (c *Conn) handleUnpackedLongHeaderPacket(
 	if err != nil {
 		return err
 	}
+	c.sentPacketHandler.ReceivedPacket(packet.encryptionLevel, rcvTime)
 	return c.receivedPacketHandler.ReceivedPacket(packet.hdr.PacketNumber, ecn, packet.encryptionLevel, rcvTime, isAckEliciting)
 }
 
@@ -1750,6 +1754,7 @@ func (c *Conn) handleUnpackedShortHeaderPacket(
 	if err != nil {
 		return false, nil, err
 	}
+	c.sentPacketHandler.ReceivedPacket(protocol.Encryption1RTT, rcvTime)
 	if err := c.receivedPacketHandler.ReceivedPacket(pn, ecn, protocol.Encryption1RTT, rcvTime, isAckEliciting); err != nil {
 		return false, nil, err
 	}

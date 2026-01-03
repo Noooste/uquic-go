@@ -17,7 +17,6 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.2 // indirect
 	github.com/onsi/gomega v1.38.2 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.40.1 // indirect
 	github.com/refraction-networking/utls v1.6.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	golang.org/x/crypto v0.41.0 // indirect

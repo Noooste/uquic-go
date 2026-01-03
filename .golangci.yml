@@ -54,7 +54,7 @@ linters:
             - pkg: 'github.com/Noooste/uquic-go/internal'
               desc: 'no dependency on quic-go/internal'
           allow:
-            - 'github.com/quic-go/quic-go/internal/synctest'
+            - 'github.com/Noooste/uquic-go/internal/synctest'
     misspell:
       ignore-rules:
         - ect

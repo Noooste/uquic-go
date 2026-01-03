@@ -76,6 +76,7 @@ var newUClientConnection = func(
 		&s.connStats,
 		false, // has no effect
 		s.conn.capabilities().ECN,
+		nil, // ignorePacketsBelow will be set later if needed
 		s.perspective,
 		s.qlogger,
 		s.logger,

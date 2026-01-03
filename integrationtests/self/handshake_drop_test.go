@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"math"
 	mrand "math/rand/v2"
 	"net"
 	"runtime"
@@ -18,7 +17,10 @@ import (
 	"time"
 
 	"github.com/Noooste/uquic-go"
+	"github.com/Noooste/uquic-go/internal/protocol"
 	"github.com/Noooste/uquic-go/internal/synctest"
+	"github.com/Noooste/uquic-go/qlog"
+	"github.com/Noooste/uquic-go/testutils/events"
 	"github.com/Noooste/uquic-go/testutils/simnet"
 
 	"github.com/stretchr/testify/require"
@@ -269,10 +271,7 @@ func TestHandshakeWithPacketLoss(t *testing.T) {
 										},
 									},
 								}
-								settings := simnet.NodeBiDiLinkSettings{
-									Downlink: simnet.LinkSettings{BitsPerSecond: math.MaxInt, Latency: rtt / 4},
-									Uplink:   simnet.LinkSettings{BitsPerSecond: math.MaxInt, Latency: rtt / 4},
-								}
+								settings := simnet.NodeBiDiLinkSettings{Latency: rtt / 2}
 								clientConn := n.NewEndpoint(clientAddr, settings)
 								defer clientConn.Close()
 								serverConn := n.NewEndpoint(serverAddr, settings)
@@ -329,4 +328,88 @@ func TestHandshakeWithPacketLoss(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestHandshakePacketBuffering(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const rtt = 20 * time.Millisecond
+
+		clientAddr := &net.UDPAddr{IP: net.ParseIP("1.0.0.1"), Port: 9001}
+		serverAddr := &net.UDPAddr{IP: net.ParseIP("1.0.0.2"), Port: 9002}
+		var droppedFirst atomic.Bool
+		n := &simnet.Simnet{
+			Router: &directionAwareDroppingRouter{
+				ClientAddr: clientAddr,
+				ServerAddr: serverAddr,
+				Drop: func(d direction, p simnet.Packet) bool {
+					if droppedFirst.Load() {
+						return false
+					}
+					if d == directionToClient && containsPacketType(p.Data, protocol.PacketTypeInitial) {
+						droppedFirst.Store(true)
+						return true
+					}
+					return false
+				},
+			},
+		}
+		settings := simnet.NodeBiDiLinkSettings{Latency: rtt / 2}
+		clientConn := n.NewEndpoint(clientAddr, settings)
+		defer clientConn.Close()
+		serverConn := n.NewEndpoint(serverAddr, settings)
+		defer serverConn.Close()
+		require.NoError(t, n.Start())
+		defer n.Close()
+
+		var serverEventRecorder events.Recorder
+		ln, err := quic.Listen(
+			serverConn,
+			getTLSConfig(),
+			getQuicConfig(&quic.Config{Tracer: newTracer(&serverEventRecorder)}),
+		)
+		require.NoError(t, err)
+		defer ln.Close()
+
+		var clientEventRecorder events.Recorder
+		conn, err := quic.Dial(
+			context.Background(),
+			clientConn,
+			ln.Addr(),
+			getTLSClientConfig(),
+			getQuicConfig(&quic.Config{Tracer: newTracer(&clientEventRecorder)}),
+		)
+		require.NoError(t, err)
+		defer conn.CloseWithError(0, "")
+		str, err := conn.OpenUniStream()
+		require.NoError(t, err)
+		data := []byte("foobar")
+		_, err = str.Write(data)
+		require.NoError(t, err)
+		require.NoError(t, str.Close())
+
+		require.Empty(t, serverEventRecorder.Events(qlog.PacketBuffered{}))
+		buffered := clientEventRecorder.Events(qlog.PacketBuffered{})
+		t.Logf("buffered packets: %d", len(buffered))
+		require.NotEmpty(t, buffered)
+		receivedPackets := make(map[qlog.DatagramID][]qlog.PacketType)
+		for _, ev := range clientEventRecorder.Events(qlog.PacketReceived{}) {
+			id := ev.(qlog.PacketReceived).DatagramID
+			receivedPackets[id] = append(receivedPackets[id], ev.(qlog.PacketReceived).Header.PacketType)
+		}
+		for _, ev := range buffered {
+			id := ev.(qlog.PacketBuffered).DatagramID
+			require.Contains(t, receivedPackets, id)
+			require.Contains(t, receivedPackets[id], qlog.PacketTypeHandshake)
+		}
+
+		sconn, err := ln.Accept(context.Background())
+		require.NoError(t, err)
+		defer sconn.CloseWithError(0, "")
+		sstr, err := sconn.AcceptUniStream(context.Background())
+		require.NoError(t, err)
+		b, err := io.ReadAll(sstr)
+		require.NoError(t, err)
+		require.Equal(t, data, b)
+		require.Equal(t, rtt, sconn.ConnectionStats().SmoothedRTT)
+	})
 }

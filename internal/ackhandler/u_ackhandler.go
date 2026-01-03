@@ -14,22 +14,24 @@ func NewUAckHandler(
 	connStats *utils.ConnectionStats,
 	clientAddressValidated bool,
 	enableECN bool,
+	ignorePacketsBelow func(protocol.PacketNumber),
 	pers protocol.Perspective,
-	tracer qlogwriter.Recorder,
+	qlogger qlogwriter.Recorder,
 	logger utils.Logger,
 ) (SentPacketHandler, ReceivedPacketHandler) {
-	sph := newSentPacketHandler(
+	sph := NewSentPacketHandler(
 		initialPacketNumber,
 		initialMaxDatagramSize,
 		rttStats,
 		connStats,
 		clientAddressValidated,
 		enableECN,
+		ignorePacketsBelow,
 		pers,
-		tracer,
+		qlogger,
 		logger,
 	)
 	return &uSentPacketHandler{
-		sentPacketHandler: sph,
-	}, newReceivedPacketHandler(sph, logger)
+		sentPacketHandler: sph.(*sentPacketHandler),
+	}, *NewReceivedPacketHandler(logger)
 }

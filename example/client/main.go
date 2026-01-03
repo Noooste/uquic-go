@@ -7,9 +7,10 @@ import (
 	"flag"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"sync"
+
+	"github.com/Noooste/fhttp"
 
 	"github.com/Noooste/uquic-go"
 	"github.com/Noooste/uquic-go/http3"
