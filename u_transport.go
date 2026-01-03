@@ -79,9 +79,6 @@ func (t *UTransport) doDial(
 		return nil, err
 	}
 
-	tracingID := nextConnTracingID()
-	ctx = context.WithValue(ctx, ConnectionTracingKey, tracingID)
-
 	t.mutex.Lock()
 	if t.closeErr != nil {
 		t.mutex.Unlock()

@@ -7,7 +7,9 @@ import (
 )
 
 // [UQUIC]
-func NewUAckHandler(
+// NewUSentPacketHandler creates a UQUIC-wrapped SentPacketHandler that supports
+// custom initial packet number length for browser fingerprinting.
+func NewUSentPacketHandler(
 	initialPacketNumber protocol.PacketNumber,
 	initialMaxDatagramSize protocol.ByteCount,
 	rttStats *utils.RTTStats,
@@ -18,7 +20,7 @@ func NewUAckHandler(
 	pers protocol.Perspective,
 	qlogger qlogwriter.Recorder,
 	logger utils.Logger,
-) (SentPacketHandler, ReceivedPacketHandler) {
+) SentPacketHandler {
 	sph := NewSentPacketHandler(
 		initialPacketNumber,
 		initialMaxDatagramSize,
@@ -33,5 +35,5 @@ func NewUAckHandler(
 	)
 	return &uSentPacketHandler{
 		sentPacketHandler: sph.(*sentPacketHandler),
-	}, *NewReceivedPacketHandler(logger)
+	}
 }

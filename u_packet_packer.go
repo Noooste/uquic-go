@@ -2,6 +2,7 @@ package quic
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/Noooste/uquic-go/internal/handshake"
@@ -56,7 +57,6 @@ func (p *uPacketPacker) PackCoalescedPacket(onlyAck bool, maxSize protocol.ByteC
 			now,
 			false,
 			onlyAck,
-			true,
 			v,
 		)
 		if initialPayload.length > 0 {
@@ -84,7 +84,6 @@ func (p *uPacketPacker) PackCoalescedPacket(onlyAck bool, maxSize protocol.ByteC
 				now,
 				false,
 				onlyAck,
-				size == 0,
 				v,
 			)
 			if handshakePayload.length > 0 {
@@ -102,7 +101,7 @@ func (p *uPacketPacker) PackCoalescedPacket(onlyAck bool, maxSize protocol.ByteC
 	if (onlyAck && size == 0) || (!onlyAck && size < maxSize-protocol.MinCoalescedPacketSize) {
 		var err error
 		oneRTTSealer, err = p.cryptoSetup.Get1RTTSealer()
-		if err != nil && err != handshake.ErrKeysDropped && err != handshake.ErrKeysNotYetAvailable {
+		if err != nil && !errors.Is(err, handshake.ErrKeysDropped) && !errors.Is(err, handshake.ErrKeysNotYetAvailable) {
 			return nil, err
 		}
 		if err == nil { // 1-RTT
@@ -110,7 +109,7 @@ func (p *uPacketPacker) PackCoalescedPacket(onlyAck bool, maxSize protocol.ByteC
 			connID = p.getDestConnID()
 			oneRTTPacketNumber, oneRTTPacketNumberLen = p.pnManager.PeekPacketNumber(protocol.Encryption1RTT)
 			hdrLen := wire.ShortHeaderLen(connID, oneRTTPacketNumberLen)
-			oneRTTPayload = p.maybeGetShortHeaderPacket(oneRTTSealer, hdrLen, maxSize-size, onlyAck, size == 0, now, v)
+			oneRTTPayload = p.maybeGetShortHeaderPacket(oneRTTSealer, hdrLen, maxSize-size, onlyAck, now, v)
 			if oneRTTPayload.length > 0 {
 				size += p.shortHeaderPacketLength(connID, oneRTTPacketNumberLen, oneRTTPayload) + protocol.ByteCount(oneRTTSealer.Overhead())
 			}
@@ -366,7 +365,6 @@ func (p *uPacketPacker) PackPTOProbePacket(
 		now,
 		addPingIfEmpty,
 		false,
-		true,
 		v)
 	if pl.length == 0 {
 		return nil, nil

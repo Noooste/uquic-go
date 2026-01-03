@@ -68,15 +68,15 @@ var newUClientConnection = func(
 		connIDGenerator,
 	)
 	s.ctx, s.ctxCancel = context.WithCancelCause(ctx)
-	s.preSetup()
-	s.sentPacketHandler, s.receivedPacketHandler = ackhandler.NewUAckHandler(
+	s.preSetup() // Creates s.receivedPacketHandler (via upstream preSetup at connection.go:558)
+	s.sentPacketHandler = ackhandler.NewUSentPacketHandler(
 		initialPacketNumber,
 		protocol.ByteCount(s.config.InitialPacketSize),
 		s.rttStats,
 		&s.connStats,
 		false, // has no effect
 		s.conn.capabilities().ECN,
-		nil, // ignorePacketsBelow will be set later if needed
+		s.receivedPacketHandler.IgnorePacketsBelow, // NOW available after preSetup
 		s.perspective,
 		s.qlogger,
 		s.logger,
@@ -133,6 +133,7 @@ var newUClientConnection = func(
 			// See https://github.com/Noooste/uquic-go/pull/3806.
 			ActiveConnectionIDLimit:   protocol.MaxActiveConnectionIDs,
 			InitialSourceConnectionID: srcConnID,
+			EnableResetStreamAt:       s.config.EnableStreamResetPartialDelivery,
 		}
 		if s.config.EnableDatagrams {
 			params.MaxDatagramFrameSize = wire.MaxDatagramSize
@@ -164,7 +165,7 @@ var newUClientConnection = func(
 			s.sentPacketHandler,
 			s.retransmissionQueue,
 			cs, s.framer,
-			s.receivedPacketHandler,
+			&s.receivedPacketHandler,
 			s.datagramQueue, s.perspective,
 		),
 		uSpec,

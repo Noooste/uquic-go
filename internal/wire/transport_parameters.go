@@ -633,6 +633,8 @@ func (tp *TransportParameters) PopulateFromUQUIC(quicparams tls.TransportParamet
 			}
 		case uint64(maxDatagramFrameSizeParameterID):
 			tp.MaxDatagramFrameSize = protocol.ByteCount(param.(tls.MaxDatagramFrameSize))
+		case uint64(resetStreamAtParameterID):
+			tp.EnableResetStreamAt = true
 		default:
 			// ignore unknown parameters
 			continue
