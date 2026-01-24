@@ -1,6 +1,6 @@
 module github.com/Noooste/uquic-go
 
-go 1.24
+go 1.24.9
 
 require (
 	github.com/Noooste/fhttp v1.0.15
