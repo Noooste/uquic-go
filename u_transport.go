@@ -19,12 +19,12 @@ type UTransport struct {
 
 // Dial dials a new connection to a remote host (not using 0-RTT).
 func (t *UTransport) Dial(ctx context.Context, addr net.Addr, tlsConf *tls.Config, conf *Config) (*Conn, error) {
-	return t.dial(ctx, addr, "", tlsConf, conf, false)
+	return t.dial(ctx, addr, "", tlsConf, conf, conf.Allow0RTT)
 }
 
 // DialEarly dials a new connection, attempting to use 0-RTT if possible.
 func (t *UTransport) DialEarly(ctx context.Context, addr net.Addr, tlsConf *tls.Config, conf *Config) (*Conn, error) {
-	return t.dial(ctx, addr, "", tlsConf, conf, true)
+	return t.dial(ctx, addr, "", tlsConf, conf, conf.Allow0RTT)
 }
 
 func (t *UTransport) dial(ctx context.Context, addr net.Addr, host string, tlsConf *tls.Config, conf *Config, use0RTT bool) (*Conn, error) {
